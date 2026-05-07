@@ -26,10 +26,8 @@ export default async function TerminalLayout({ children }: { children: React.Rea
     <div className="min-h-screen flex flex-col">
       <TopTicker />
       <div className="flex flex-1 min-h-0">
-        <div className="flex flex-col">
-          <Sidebar pts={pts} isVipActive={isVipActive} />
-        </div>
-        <main className="flex-1 grid-bg overflow-hidden flex flex-col">
+        <Sidebar pts={pts} isVipActive={isVipActive} />
+        <main className="flex-1 min-w-0 grid-bg overflow-hidden flex flex-col">
           {children}
         </main>
         <aside className="hidden xl:flex w-[260px] shrink-0 border-l border-bg-edge bg-bg-panel/40 flex-col gap-4 p-4">
@@ -38,11 +36,11 @@ export default async function TerminalLayout({ children }: { children: React.Rea
           <AutoPushPanel />
         </aside>
       </div>
-      <footer className="border-t border-bg-edge bg-bg-panel/60 px-6 py-1.5 flex items-center justify-between text-[10px] text-ink-dim tracking-wide">
-        <span>
+      <footer className="border-t border-bg-edge bg-bg-panel/60 px-3 sm:px-6 py-1.5 flex items-center justify-between gap-3 text-[10px] text-ink-dim tracking-wide">
+        <span className="line-clamp-2 sm:line-clamp-1">
           ⚠ 行情滚动条、机构脉冲、AI 预测胜率均为<span className="text-accent-gold">演示数据</span>，不构成任何投资建议。市场有风险，决策需独立判断。
         </span>
-        <span className="text-ink-dim/70">DEV_BUILD · v0.1</span>
+        <span className="shrink-0 text-ink-dim/70 hidden sm:inline">DEV_BUILD · v0.1</span>
       </footer>
     </div>
   );

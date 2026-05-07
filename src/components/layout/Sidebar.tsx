@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
 type NavItem = { href: string; label: string; icon: ReactNode; group: "channel" | "feature"; pro?: boolean };
 
@@ -21,65 +21,122 @@ const NAV: NavItem[] = [
 export function Sidebar({ pts = 2500, isVipActive = false }: { pts?: number; isVipActive?: boolean }) {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const [open, setOpen] = useState(false);
   const channels = NAV.filter((n) => n.group === "channel");
   const features = NAV.filter((n) => n.group === "feature");
 
-  return (
-    <aside className="w-[260px] shrink-0 border-r border-bg-edge bg-bg-panel/40 flex flex-col">
-      <div className="p-5 flex items-center gap-3 border-b border-bg-edge">
-        <div className="size-10 rounded-lg bg-gradient-to-br from-accent-info to-accent-purple flex items-center justify-center text-white font-bold">P</div>
-        <div>
-          <div className="text-ink-bright text-sm font-bold tracking-wide">PENG GE AI</div>
-          <div className="text-[9px] tracking-[0.25em] text-accent-info uppercase">Trading Terminal</div>
-        </div>
-      </div>
+  // 切路由自动收抽屉
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
-      <div className="px-5 py-4 border-b border-bg-edge space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="label-tag">Connectivity Status</span>
-          <span className="size-2 rounded-full bg-accent-neon shadow-[0_0_8px_rgba(57,217,138,0.8)] animate-pulseLine" />
+  // 抽屉打开时禁止 body 滚动
+  useEffect(() => {
+    if (open) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  return (
+    <>
+      {/* 移动端汉堡按钮（仅 <md 显示） */}
+      <button
+        type="button"
+        aria-label="打开菜单"
+        onClick={() => setOpen(true)}
+        className="md:hidden fixed top-3 left-3 z-50 size-9 rounded-md bg-bg-panel/90 border border-bg-edge backdrop-blur grid place-items-center text-ink-base hover:text-accent-razer hover:border-accent-razer/60 transition-colors"
+      >
+        <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M2 4h12M2 8h12M2 12h12" />
+        </svg>
+      </button>
+
+      {/* 移动端遮罩 */}
+      {open && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`
+          fixed md:static inset-y-0 left-0 z-50
+          w-[280px] md:w-[260px] shrink-0
+          border-r border-bg-edge bg-bg-panel/95 md:bg-bg-panel/40 backdrop-blur md:backdrop-blur-none
+          flex flex-col
+          transform transition-transform duration-200
+          ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        `}
+      >
+        <div className="p-5 flex items-center gap-3 border-b border-bg-edge">
+          <div className="size-10 rounded-lg bg-gradient-to-br from-accent-razer to-emerald-700 flex items-center justify-center text-bg-base font-bold razer-glow">P</div>
+          <div className="flex-1">
+            <div className="text-ink-bright text-sm font-bold tracking-wide">PENG GE AI</div>
+            <div className="text-[9px] tracking-[0.25em] text-accent-razer uppercase">Trading Terminal</div>
+          </div>
+          {/* 移动端关闭按钮 */}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="关闭菜单"
+            className="md:hidden size-8 rounded-md grid place-items-center text-ink-muted hover:text-accent-danger"
+          >
+            <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M3 3l10 10M13 3L3 13" />
+            </svg>
+          </button>
         </div>
-        <div className="text-[11px] text-accent-neon tracking-wider">STANDARD_SSL_PROXY</div>
-        <div>
-          <div className="text-[10px] text-ink-dim uppercase tracking-widest">算力资源池</div>
-          {isVipActive ? (
-            <div className="text-2xl text-accent-gold font-light flex items-baseline gap-1.5">
-              ∞ <span className="text-[10px] text-accent-gold tracking-widest uppercase">VIP 无限算力</span>
+
+        <div className="px-5 py-4 border-b border-bg-edge space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="label-tag">Connectivity Status</span>
+            <span className="size-2 rounded-full bg-accent-razer shadow-[0_0_8px_rgba(68,214,44,0.8)] animate-pulseLine" />
+          </div>
+          <div className="text-[11px] text-accent-razer tracking-wider">STANDARD_SSL_PROXY</div>
+          <div>
+            <div className="text-[10px] text-ink-dim uppercase tracking-widest">算力资源池</div>
+            {isVipActive ? (
+              <div className="text-2xl text-accent-gold font-light flex items-baseline gap-1.5">
+                ∞ <span className="text-[10px] text-accent-gold tracking-widest uppercase">VIP 无限算力</span>
+              </div>
+            ) : (
+              <div className="text-2xl text-ink-bright font-light">
+                {pts.toLocaleString()} <span className="text-[10px] text-ink-dim">pts</span>
+              </div>
+            )}
+          </div>
+          <Link href="/pricing" className="btn-primary w-full">
+            提升至专业版 (VIP)
+          </Link>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+          <NavGroup title="专属问询频道" items={channels} pathname={pathname} />
+          <NavGroup title="功能面板 & 学习" items={features} pathname={pathname} />
+        </nav>
+
+        <div className="border-t border-bg-edge p-4 text-[11px] text-ink-muted">
+          {session?.user ? (
+            <div className="space-y-1">
+              <div className="text-ink-base truncate">{session.user.name || session.user.email}</div>
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="text-accent-danger hover:text-red-400"
+              >
+                登出
+              </button>
             </div>
           ) : (
-            <div className="text-2xl text-ink-bright font-light">
-              {pts.toLocaleString()} <span className="text-[10px] text-ink-dim">pts</span>
-            </div>
+            <Link href="/login" className="text-accent-razer">
+              登录账号
+            </Link>
           )}
         </div>
-        <Link href="/pricing" className="btn-primary w-full">
-          提升至专业版 (VIP)
-        </Link>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-        <NavGroup title="专属问询频道" items={channels} pathname={pathname} />
-        <NavGroup title="功能面板 & 学习" items={features} pathname={pathname} />
-      </nav>
-
-      <div className="border-t border-bg-edge p-4 text-[11px] text-ink-muted">
-        {session?.user ? (
-          <div className="space-y-1">
-            <div className="text-ink-base truncate">{session.user.name || session.user.email}</div>
-            <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="text-accent-danger hover:text-red-400"
-            >
-              登出
-            </button>
-          </div>
-        ) : (
-          <Link href="/login" className="text-accent-info">
-            登录账号
-          </Link>
-        )}
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 
