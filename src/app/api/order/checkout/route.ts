@@ -24,16 +24,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "商品代码无效" }, { status: 400 });
   }
 
-  // 防抖：3 秒内同用户已有 PENDING 单则拒绝。
-  const recentPending = await prisma.order.findFirst({
+  // 防抖：3 秒内同用户已有任何订单则拒绝（PENDING/PAID 都算）。
+  // 之前只查 PENDING 状态，但订单 PENDING→PAID 翻转太快，几乎拦不住，故放宽到全部状态。
+  const recent = await prisma.order.findFirst({
     where: {
       userId,
-      status: "PENDING",
       createdAt: { gt: new Date(Date.now() - DEBOUNCE_MS) },
     },
     select: { id: true },
   });
-  if (recentPending) {
+  if (recent) {
     return NextResponse.json(
       { error: "操作过于频繁，请稍后重试" },
       { status: 429 },
