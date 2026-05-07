@@ -25,6 +25,7 @@ export default async function ProfilePage() {
       vipExpiresAt: true,
       agentLevel: true,
       parentAgentId: true,
+      tradingStyle: true,
       createdAt: true,
     },
   });
@@ -56,6 +57,7 @@ export default async function ProfilePage() {
             vipExpiresAt: user.vipExpiresAt ? user.vipExpiresAt.toISOString() : null,
             agentLevel: user.agentLevel,
             parentNickname,
+            tradingStyle: (user.tradingStyle as "INTRADAY" | "SWING" | "POSITION" | "LEARNING") ?? "LEARNING",
             createdAt: user.createdAt.toISOString(),
           }}
         />

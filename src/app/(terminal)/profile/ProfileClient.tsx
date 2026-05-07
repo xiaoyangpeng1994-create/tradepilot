@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { signOut } from "next-auth/react";
 
+type TradingStyle = "INTRADAY" | "SWING" | "POSITION" | "LEARNING";
+
 type ProfileData = {
   id: string;
   nickname: string;
@@ -13,24 +15,48 @@ type ProfileData = {
   vipExpiresAt: string | null;
   agentLevel: number;
   parentNickname: string | null;
+  tradingStyle: TradingStyle;
   createdAt: string;
 };
+
+const STYLE_OPTIONS: Array<{
+  value: TradingStyle;
+  label: string;
+  desc: string;
+  intervals: string;
+}> = [
+  { value: "INTRADAY", label: "日内交易", desc: "持仓几分钟-几小时", intervals: "15m + 1H" },
+  { value: "SWING", label: "短线/波段", desc: "持仓几天-2 周", intervals: "1H + 4H" },
+  { value: "POSITION", label: "长线/趋势", desc: "持仓 1 月+", intervals: "4H + Daily" },
+  { value: "LEARNING", label: "学习中", desc: "尚未固定风格", intervals: "1H + 4H · 教学" },
+];
 
 export function ProfileClient({ user }: { user: ProfileData }) {
   const isVipActive =
     user.vipLevel !== "FREE" &&
     (!user.vipExpiresAt || new Date(user.vipExpiresAt).getTime() > Date.now());
+  const isVipPlusActive =
+    isVipActive && (user.vipLevel === "PRO_PLUS_MONTH" || user.vipLevel === "PRO_PLUS_YEAR");
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-      <IdentityCard user={user} isVipActive={isVipActive} />
+      <IdentityCard user={user} isVipActive={isVipActive} isVipPlusActive={isVipPlusActive} />
+      <TradingStyleSection initial={user.tradingStyle} />
       <PasswordSection />
       <DangerSection />
     </div>
   );
 }
 
-function IdentityCard({ user, isVipActive }: { user: ProfileData; isVipActive: boolean }) {
+function IdentityCard({
+  user,
+  isVipActive,
+  isVipPlusActive,
+}: {
+  user: ProfileData;
+  isVipActive: boolean;
+  isVipPlusActive: boolean;
+}) {
   return (
     <div className="terminal-card p-5 space-y-4">
       <div className="flex items-center justify-between">
@@ -82,13 +108,13 @@ function IdentityCard({ user, isVipActive }: { user: ProfileData; isVipActive: b
         />
         <Stat
           label="VIP 等级"
-          value={isVipActive ? user.vipLevel : "FREE"}
+          value={isVipPlusActive ? "ULTRA" : isVipActive ? user.vipLevel : "FREE"}
           sub={
             isVipActive && user.vipExpiresAt
               ? `到期 ${new Date(user.vipExpiresAt).toLocaleDateString("zh-CN")}`
               : "未开通"
           }
-          tone={isVipActive ? "gold" : "muted"}
+          tone={isVipPlusActive ? "purple" : isVipActive ? "gold" : "muted"}
         />
       </div>
     </div>
@@ -129,19 +155,100 @@ function Stat({
   label: string;
   value: string;
   sub?: string;
-  tone: "razer" | "gold" | "muted";
+  tone: "razer" | "gold" | "muted" | "purple";
 }) {
   const toneClass =
     tone === "razer"
       ? "text-accent-razer"
       : tone === "gold"
         ? "text-accent-gold"
-        : "text-ink-muted";
+        : tone === "purple"
+          ? "text-accent-purple"
+          : "text-ink-muted";
   return (
     <div className="terminal-card p-3 bg-bg-card/40">
       <div className="text-[10px] tracking-widest uppercase text-ink-dim">{label}</div>
       <div className={`mt-1 text-2xl font-light ${toneClass}`}>{value}</div>
       {sub && <div className="text-[10px] text-ink-dim mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+function TradingStyleSection({ initial }: { initial: TradingStyle }) {
+  const [style, setStyle] = useState<TradingStyle>(initial);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  async function pick(v: TradingStyle) {
+    if (v === style || busy) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/profile/style", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tradingStyle: v }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ kind: "err", text: data.error ?? "保存失败" });
+      } else {
+        setStyle(v);
+        setMsg({ kind: "ok", text: "✓ 已切换，下次对话起 AI 按新风格分析" });
+      }
+    } catch {
+      setMsg({ kind: "err", text: "网络异常" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="terminal-card p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] tracking-widest uppercase text-ink-dim">
+          AI · TRADING STYLE
+        </span>
+        <span className="text-[10px] text-ink-dim">影响 K 线周期 + 回答风格</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {STYLE_OPTIONS.map((opt) => {
+          const active = style === opt.value;
+          return (
+            <button
+              type="button"
+              key={opt.value}
+              onClick={() => pick(opt.value)}
+              disabled={busy}
+              className={`text-left p-3 rounded-md border text-xs transition-colors ${
+                active
+                  ? "border-accent-razer bg-accent-razer/10 text-ink-bright"
+                  : "border-bg-edge bg-bg-card hover:border-accent-razer/40 text-ink-base"
+              } ${busy ? "opacity-60 cursor-wait" : ""}`}
+            >
+              <div className="font-bold text-sm flex items-center gap-1.5">
+                {active && <span className="text-accent-razer">●</span>}
+                {opt.label}
+              </div>
+              <div className="text-[10px] text-ink-dim mt-1 leading-relaxed">{opt.desc}</div>
+              <div className="text-[10px] text-accent-razer mt-1 tracking-wider">
+                {opt.intervals}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {msg && (
+        <div
+          className={`text-xs rounded px-3 py-2 border ${
+            msg.kind === "ok"
+              ? "border-accent-razer/50 bg-accent-razer/10 text-accent-razer"
+              : "border-accent-danger/50 bg-accent-danger/10 text-accent-danger"
+          }`}
+        >
+          {msg.text}
+        </div>
+      )}
     </div>
   );
 }
