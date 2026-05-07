@@ -15,6 +15,7 @@ const NAV: NavItem[] = [
   { href: "/academy", label: "裸 K 实战学院", icon: <IconEye />, group: "feature" },
   { href: "/twitter", label: "X (推特) 大神追踪", icon: <IconTwitter />, group: "feature" },
   { href: "/agent", label: "代理商中心", icon: <IconUsers />, group: "feature" },
+  { href: "/orders", label: "账单中心", icon: <IconReceipt />, group: "feature" },
 ];
 
 export function Sidebar({ pts = 2500, isVipActive = false }: { pts?: number; isVipActive?: boolean }) {
@@ -128,4 +129,7 @@ function IconTwitter() {
 }
 function IconUsers() {
   return <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="6" cy="5" r="2.5" /><circle cx="12" cy="6" r="2" /><path d="M2 13c0-2 2-3.5 4-3.5s4 1.5 4 3.5v1H2zM10 14v-1c0-1.2-.5-2.2-1.4-2.9.5-.1.9-.1 1.4-.1 2 0 4 1.5 4 3.5v.5z" /></svg>;
+}
+function IconReceipt() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 1v14l2-1.5L7 15l2-1.5L11 15l2-1.5V1H3z" /><path d="M5 5h6M5 8h6M5 11h4" /></svg>;
 }
