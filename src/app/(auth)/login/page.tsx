@@ -79,12 +79,13 @@ function LoginForm() {
         {loading ? "正在握手..." : "进入终端"}
       </button>
 
-      <div className="text-xs text-ink-muted flex justify-between pt-2 border-t border-bg-edge">
+      <Link
+        href="/register"
+        className="text-xs text-ink-muted flex justify-between items-center pt-2 border-t border-bg-edge hover:text-ink-base transition-colors"
+      >
         <span>没有账号？</span>
-        <Link href="/register" className="text-accent-info hover:text-accent-info/80">
-          申请节点接入 →
-        </Link>
-      </div>
+        <span className="text-accent-info">申请节点接入 →</span>
+      </Link>
     </form>
   );
 }

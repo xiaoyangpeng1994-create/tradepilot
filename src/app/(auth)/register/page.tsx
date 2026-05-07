@@ -62,12 +62,14 @@ function RegisterForm() {
     };
   }, [inviteCode]);
 
-  const inviteValid = preview.state === "valid";
+  const inviteFilled = inviteCode.trim().length > 0;
+  // 邀请码留空 OK；填了必须 valid 才能提交
+  const inviteOK = !inviteFilled || preview.state === "valid";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!inviteValid) {
-      setError("请输入有效的邀请码");
+    if (inviteFilled && preview.state !== "valid") {
+      setError("邀请码无效，请清空或填写有效邀请码");
       return;
     }
     setError(null);
@@ -117,14 +119,14 @@ function RegisterForm() {
 
       <div className="space-y-3">
         <Field
-          label="邀请码"
+          label="邀请码（可选）"
           id="invite"
           type="text"
           value={inviteCode}
           onChange={setInviteCode}
-          required
           autoFocus={!initialInvite}
           slot={<InvitePreviewBadge preview={preview} />}
+          hint="填邀请人 ID/昵称可获得双方奖励；留空也可注册（成为顶级节点）"
         />
         <Field
           label="昵称"
@@ -156,7 +158,7 @@ function RegisterForm() {
 
       <button
         type="submit"
-        disabled={loading || !inviteValid}
+        disabled={loading || !inviteOK}
         className="btn-primary w-full disabled:opacity-50"
       >
         {loading ? "正在生成节点..." : "开通终端账号"}
@@ -166,12 +168,13 @@ function RegisterForm() {
         手机号短信验证将在下一版本上线，届时所有账号需补充验证以防风控。
       </div>
 
-      <div className="text-xs text-ink-muted flex justify-between pt-1">
+      <Link
+        href="/login"
+        className="text-xs text-ink-muted flex justify-between items-center pt-1 hover:text-ink-base transition-colors"
+      >
         <span>已有账号？</span>
-        <Link href="/login" className="text-accent-info hover:text-accent-info/80">
-          直接登录 →
-        </Link>
-      </div>
+        <span className="text-accent-info">直接登录 →</span>
+      </Link>
     </form>
   );
 }

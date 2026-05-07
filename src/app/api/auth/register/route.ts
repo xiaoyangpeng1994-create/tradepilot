@@ -14,7 +14,7 @@ const schema = z.object({
     .max(24, "昵称不超过 24 位")
     .regex(/^[\w一-龥][\w一-龥\-\.]*$/, "昵称仅支持中英数字与 _ - ."),
   password: z.string().min(6, "密码至少 6 位").max(64),
-  inviteCode: z.string().min(1, "邀请码必填").max(64),
+  inviteCode: z.string().max(64).optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   const { password } = parsed.data;
   const nickname = parsed.data.nickname.trim().toLowerCase();
-  const trimmedCode = parsed.data.inviteCode.trim();
+  const trimmedCode = parsed.data.inviteCode?.trim() ?? "";
   const seedCode = process.env.SEED_INVITE_CODE?.trim();
 
   if (seedCode && nickname === seedCode.toLowerCase()) {
@@ -50,19 +50,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "该昵称已被占用" }, { status: 409 });
   }
 
+  // 注册策略（2026-05-07 改）：邀请码可选。
+  //   - 留空 → 顶级孤儿节点 (parentAgentId = null), 无邀请奖励
+  //   - 填 SEED 码 → 顶级管理员节点 (parentAgentId = null), 无邀请奖励
+  //   - 填真实邀请人 → 绑父级 + 邀请人 +200pt
+  //   - 填了但无效 → 拒绝（不静默忽略，避免用户以为绑了实际没绑）
   let parentAgentId: string | null = null;
 
-  if (seedCode && trimmedCode === seedCode) {
-    parentAgentId = null;
-  } else {
-    const inviter = await prisma.user.findFirst({
-      where: { OR: [{ id: trimmedCode }, { nickname: trimmedCode.toLowerCase() }] },
-      select: { id: true },
-    });
-    if (!inviter) {
-      return NextResponse.json({ error: "邀请码无效" }, { status: 400 });
+  if (trimmedCode) {
+    if (seedCode && trimmedCode === seedCode) {
+      parentAgentId = null;
+    } else {
+      const inviter = await prisma.user.findFirst({
+        where: { OR: [{ id: trimmedCode }, { nickname: trimmedCode.toLowerCase() }] },
+        select: { id: true },
+      });
+      if (!inviter) {
+        return NextResponse.json({ error: "邀请码无效" }, { status: 400 });
+      }
+      parentAgentId = inviter.id;
     }
-    parentAgentId = inviter.id;
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
