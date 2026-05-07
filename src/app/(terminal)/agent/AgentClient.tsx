@@ -1,5 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import {
+  SIGNUP_BONUS_PTS,
+  INVITER_BONUS_PTS,
+  COST_TEXT_PT,
+} from "@/lib/pricing";
 
 type Stats = {
   walletBalanceCny: string;
@@ -216,13 +221,13 @@ function InvitePanel({ nickname }: { nickname: string }) {
   }, []);
   const url = origin ? `${origin}/register?ref=${encodeURIComponent(nickname)}` : "";
   const template = url
-    ? `🚀 我在用「彭哥 AI 交易终端」做交易决策辅助，Gemini 大模型 + SMC/ICT 框架，覆盖外汇/黄金/加密/美股/A股 5 大频道。
+    ? `🚀 我在用「彭哥 AI 交易终端」做交易决策辅助，PG 系列推理引擎 + SMC/ICT 框架，覆盖外汇/黄金/加密/美股/A股 5 大频道。
 
 通过我的链接注册：
 ${url}
 
-✅ 立即赠 500 算力点（够深度体验所有频道）
-✅ 用我的邀请码后我也能拿 200pt 奖励
+✅ 立即赠 ${SIGNUP_BONUS_PTS.toLocaleString()} 算力点（约 ${Math.floor(SIGNUP_BONUS_PTS / COST_TEXT_PT)} 次完整推理）
+✅ 用我的邀请码后我也能拿 ${INVITER_BONUS_PTS}pt 奖励
 ✅ 你后续充值/订阅，我可获返佣，等于双方共赢`
     : "";
 

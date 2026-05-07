@@ -13,13 +13,22 @@ const NAV: NavItem[] = [
   { href: "/us-stocks", label: "美股主力追踪", icon: <IconBars />, group: "channel" },
   { href: "/a-shares", label: "A股主力透视", icon: <IconChartLine />, group: "channel" },
   { href: "/academy", label: "裸 K 实战学院", icon: <IconEye />, group: "feature" },
+  { href: "/journal", label: "我的交易日志", icon: <IconJournal />, group: "feature" },
   { href: "/twitter", label: "X (推特) 大神追踪", icon: <IconTwitter />, group: "feature" },
   { href: "/agent", label: "代理商中心", icon: <IconUsers />, group: "feature" },
   { href: "/orders", label: "账单中心", icon: <IconReceipt />, group: "feature" },
   { href: "/profile", label: "个人中心", icon: <IconUser />, group: "feature" },
 ];
 
-export function Sidebar({ pts = 2500, isVipActive = false }: { pts?: number; isVipActive?: boolean }) {
+export function Sidebar({
+  pts = 0,
+  isVipActive = false,
+  isVipPlusActive = false,
+}: {
+  pts?: number;
+  isVipActive?: boolean;
+  isVipPlusActive?: boolean;
+}) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
@@ -99,7 +108,11 @@ export function Sidebar({ pts = 2500, isVipActive = false }: { pts?: number; isV
           <div className="text-[11px] text-accent-razer tracking-wider">STANDARD_SSL_PROXY</div>
           <div>
             <div className="text-[10px] text-ink-dim uppercase tracking-widest">算力资源池</div>
-            {isVipActive ? (
+            {isVipPlusActive ? (
+              <div className="text-2xl text-accent-purple font-light flex items-baseline gap-1.5">
+                ⚡ <span className="text-[10px] text-accent-purple tracking-widest uppercase">ULTRA · 旗舰旗舰版</span>
+              </div>
+            ) : isVipActive ? (
               <div className="text-2xl text-accent-gold font-light flex items-baseline gap-1.5">
                 ∞ <span className="text-[10px] text-accent-gold tracking-widest uppercase">VIP 无限算力</span>
               </div>
@@ -109,8 +122,15 @@ export function Sidebar({ pts = 2500, isVipActive = false }: { pts?: number; isV
               </div>
             )}
           </div>
-          <Link href="/pricing" className="btn-primary w-full">
-            提升至专业版 (VIP)
+          <Link
+            href="/pricing"
+            className={isVipActive && !isVipPlusActive ? "btn-gold w-full" : "btn-primary w-full"}
+          >
+            {isVipPlusActive
+              ? "管理订阅"
+              : isVipActive
+                ? "升级 ULTRA"
+                : "提升至专业版 (VIP)"}
           </Link>
         </div>
 
@@ -198,4 +218,7 @@ function IconReceipt() {
 }
 function IconUser() {
   return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="5" r="3" /><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" /></svg>;
+}
+function IconJournal() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 2h8a2 2 0 012 2v10H5a2 2 0 01-2-2V2z" /><path d="M3 12a2 2 0 012-2h8" /><path d="M6 5h5M6 8h4" /></svg>;
 }

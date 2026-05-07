@@ -2,11 +2,13 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TopTicker } from "@/components/layout/TopTicker";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isProPlusLevel } from "@/lib/pricing";
 
 export default async function TerminalLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  let pts = 2500;
+  let pts = 0;
   let isVipActive = false;
+  let isVipPlusActive = false;
   if (session?.user?.id) {
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -17,14 +19,15 @@ export default async function TerminalLayout({ children }: { children: React.Rea
       isVipActive =
         user.vipLevel !== "FREE" &&
         (!user.vipExpiresAt || user.vipExpiresAt.getTime() > Date.now());
+      isVipPlusActive = isVipActive && isProPlusLevel(user.vipLevel);
     }
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       <TopTicker />
-      <div className="flex flex-1 min-h-0">
-        <Sidebar pts={pts} isVipActive={isVipActive} />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <Sidebar pts={pts} isVipActive={isVipActive} isVipPlusActive={isVipPlusActive} />
         <main className="flex-1 min-w-0 grid-bg overflow-hidden flex flex-col">
           {children}
         </main>

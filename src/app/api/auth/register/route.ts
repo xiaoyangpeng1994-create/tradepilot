@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { INVITER_BONUS_PTS } from "@/lib/pricing";
 
 export const runtime = "nodejs";
 
-const INVITER_BONUS_PTS = 200;
+const TRADING_STYLES = ["INTRADAY", "SWING", "POSITION", "LEARNING"] as const;
 
 const schema = z.object({
   nickname: z
@@ -15,6 +16,7 @@ const schema = z.object({
     .regex(/^[\w一-龥][\w一-龥\-\.]*$/, "昵称仅支持中英数字与 _ - ."),
   password: z.string().min(6, "密码至少 6 位").max(64),
   inviteCode: z.string().max(64).optional().nullable(),
+  tradingStyle: z.enum(TRADING_STYLES).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
   const { password } = parsed.data;
   const nickname = parsed.data.nickname.trim().toLowerCase();
   const trimmedCode = parsed.data.inviteCode?.trim() ?? "";
+  const tradingStyle = parsed.data.tradingStyle ?? "LEARNING";
   const seedCode = process.env.SEED_INVITE_CODE?.trim();
 
   if (seedCode && nickname === seedCode.toLowerCase()) {
@@ -81,6 +84,7 @@ export async function POST(req: NextRequest) {
         nickname,
         passwordHash,
         parentAgentId,
+        tradingStyle,
       },
       select: { id: true, nickname: true },
     });

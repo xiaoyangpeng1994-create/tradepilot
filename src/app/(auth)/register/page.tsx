@@ -3,12 +3,42 @@ import { Suspense, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { SIGNUP_BONUS_PTS, COST_TEXT_PT } from "@/lib/pricing";
 
 type InvitePreview =
   | { state: "idle" }
   | { state: "checking" }
   | { state: "valid"; label: string }
   | { state: "invalid" };
+
+type TradingStyle = "INTRADAY" | "SWING" | "POSITION" | "LEARNING";
+
+const STYLE_OPTIONS: Array<{
+  value: TradingStyle;
+  label: string;
+  desc: string;
+}> = [
+  {
+    value: "INTRADAY",
+    label: "日内",
+    desc: "持仓几分钟-几小时 · 关注 15m/1H 精确入场",
+  },
+  {
+    value: "SWING",
+    label: "短线",
+    desc: "持仓几天-2 周 · 关注 1H/4H 多周期共振",
+  },
+  {
+    value: "POSITION",
+    label: "长线",
+    desc: "持仓 1 月+ · 关注 4H/Daily 趋势 + 宏观",
+  },
+  {
+    value: "LEARNING",
+    label: "学习中",
+    desc: "尚未固定风格 · 教学型回答，鼓励小仓位实操",
+  },
+];
 
 function RegisterForm() {
   const router = useRouter();
@@ -18,6 +48,7 @@ function RegisterForm() {
   const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState(initialInvite);
+  const [tradingStyle, setTradingStyle] = useState<TradingStyle>("LEARNING");
   const [preview, setPreview] = useState<InvitePreview>({ state: "idle" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -78,7 +109,7 @@ function RegisterForm() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname, password, inviteCode }),
+        body: JSON.stringify({ nickname, password, inviteCode, tradingStyle }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -113,7 +144,8 @@ function RegisterForm() {
         <div className="label-tag">NODE_REGISTRATION · SECURE_HANDSHAKE</div>
         <h1 className="text-ink-bright text-xl font-bold tracking-wide">申请节点接入</h1>
         <p className="text-ink-muted text-xs">
-          注册即赠 <span className="text-accent-neon">2,500 算力点</span>，可立即体验 5 大频道 AI 推理。
+          注册即赠 <span className="text-accent-neon">{SIGNUP_BONUS_PTS.toLocaleString()} 算力点</span>
+          （约 {Math.floor(SIGNUP_BONUS_PTS / COST_TEXT_PT)} 次完整推理），跨 5 大频道立即体验。
         </p>
       </div>
 
@@ -148,6 +180,35 @@ function RegisterForm() {
           autoComplete="new-password"
           hint="至少 6 位"
         />
+
+        <div>
+          <span className="label-tag block mb-1.5">交易风格（用于 AI 个性化分析）</span>
+          <div className="grid grid-cols-2 gap-2">
+            {STYLE_OPTIONS.map((opt) => (
+              <button
+                type="button"
+                key={opt.value}
+                onClick={() => setTradingStyle(opt.value)}
+                className={`text-left p-2.5 rounded-md border text-xs transition-colors ${
+                  tradingStyle === opt.value
+                    ? "border-accent-razer bg-accent-razer/10 text-ink-bright"
+                    : "border-bg-edge bg-bg-card hover:border-accent-razer/40 text-ink-base"
+                }`}
+              >
+                <div className="font-bold text-sm flex items-center gap-1.5">
+                  {tradingStyle === opt.value && (
+                    <span className="text-accent-razer">●</span>
+                  )}
+                  {opt.label}
+                </div>
+                <div className="text-[10px] text-ink-dim mt-0.5 leading-relaxed">{opt.desc}</div>
+              </button>
+            ))}
+          </div>
+          <span className="text-[10px] text-ink-dim mt-1 block">
+            注册后可在「个人中心」随时切换
+          </span>
+        </div>
       </div>
 
       {error && (
