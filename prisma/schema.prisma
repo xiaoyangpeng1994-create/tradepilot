@@ -15,10 +15,11 @@ model User {
   phone           String?   @unique
   computePts      Int       @default(500)
   walletBalance   Int       @default(0)        // 钱包余额（人民币 分）
-  vipLevel        String    @default("FREE")    // FREE | PRO_MONTH | PRO_YEAR
+  vipLevel        String    @default("FREE")    // FREE | PRO_MONTH | PRO_YEAR | PRO_PLUS_MONTH | PRO_PLUS_YEAR
   vipExpiresAt    DateTime?
   parentAgentId   String?
   agentLevel      Int       @default(0)         // 0=普通用户 1=直属代理 2=二级代理
+  tradingStyle    String    @default("LEARNING") // INTRADAY | SWING | POSITION | LEARNING
   createdAt       DateTime  @default(now())
 
   parentAgent     User?     @relation("AgentTree", fields: [parentAgentId], references: [id])
@@ -27,6 +28,7 @@ model User {
   orders          Order[]
   commissions     CommissionLog[] @relation("RecipientCommissions")
   chatSessions    ChatSession[]
+  trades          Trade[]
 }
 
 model Order {
@@ -78,4 +80,44 @@ model ChatMessage {
   createdAt  DateTime @default(now())
 
   session    ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+// 匿名访客配额：以 IP+UA 哈希为主键，count 在 24h 滚动窗口内累计
+model AnonQuota {
+  id          String   @id @default(cuid())
+  fingerprint String   @unique
+  count       Int      @default(0)
+  resetAt     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
+// 用户交易日志：每笔交易一行，开仓时创建，平仓时更新 exitPrice/pnl/closedAt
+// 沉淀的核心数据 → 给 AI 注入 trader profile，实现真正的"懂你"
+model Trade {
+  id           String   @id @default(cuid())
+  userId       String
+  symbol       String   // 自由格式：BTCUSDT / EUR/USD / AAPL / 600519 等
+  channel      String?  // crypto | forex | gold | us-stocks | a-shares
+  direction    String   // LONG | SHORT
+  entryPrice   Float
+  stopPrice    Float?
+  targetPrice  Float?
+  exitPrice    Float?
+  pnlPct       Float?   // 平仓后自动计算的有符号收益率
+  status       String   @default("OPEN") // OPEN | CLOSED
+  setup        String?  // 用户标注的策略类型: OB 回踩 / FVG 填补 / MSB / 突破 / 流动性扫损 / 其他
+  timeframe    String?  // 15m | 1h | 4h | 1d | weekly
+  notes        String?  // 自由文本：开仓理由、复盘心得
+  openedAt     DateTime @default(now())
+  closedAt     DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, openedAt])
+  @@index([userId, status])
 }

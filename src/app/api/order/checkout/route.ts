@@ -112,17 +112,27 @@ export async function POST(req: NextRequest) {
       } else if (item.kind === "SUBSCRIBE" && item.vipDays) {
         const user = await tx.user.findUnique({
           where: { id: userId },
-          select: { vipExpiresAt: true },
+          select: { vipExpiresAt: true, vipLevel: true },
         });
         const base =
           user?.vipExpiresAt && user.vipExpiresAt.getTime() > now.getTime()
             ? user.vipExpiresAt
             : now;
         const newExpiry = new Date(base.getTime() + item.vipDays * 86400_000);
+        // 防降级：当前 ULTRA 在期 + 买的是普通 VIP，保留 ULTRA 等级（仍延期），
+        // 否则用新购档位
+        const currentIsUltra =
+          !!user &&
+          (user.vipLevel === "PRO_PLUS_MONTH" || user.vipLevel === "PRO_PLUS_YEAR") &&
+          !!user.vipExpiresAt &&
+          user.vipExpiresAt.getTime() > now.getTime();
+        const incomingIsUltra =
+          item.itemCode === "PRO_PLUS_MONTH" || item.itemCode === "PRO_PLUS_YEAR";
+        const nextLevel = currentIsUltra && !incomingIsUltra ? user!.vipLevel : item.itemCode;
         await tx.user.update({
           where: { id: userId },
           data: {
-            vipLevel: item.itemCode,
+            vipLevel: nextLevel,
             vipExpiresAt: newExpiry,
           },
         });
