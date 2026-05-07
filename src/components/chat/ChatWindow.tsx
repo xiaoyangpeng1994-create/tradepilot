@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 export type ChatMessage = {
   id: string;
@@ -9,17 +9,22 @@ export type ChatMessage = {
   ts: string;
 };
 
-export function ChatWindow({
-  channel,
-  intro,
-  pair = "主要货币对",
-  placeholder = "输入行情代码或与彭哥对话...",
-}: {
+export type ChatWindowHandle = {
+  ask: (text: string) => void;
+};
+
+export const ChatWindow = forwardRef<ChatWindowHandle, {
   channel: string;
   intro: string;
-  pair?: string;
   placeholder?: string;
-}) {
+}>(function ChatWindow(
+  {
+    channel,
+    intro,
+    placeholder = "输入行情代码或与彭哥对话...",
+  },
+  ref,
+) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "intro",
@@ -83,6 +88,13 @@ export function ChatWindow({
     }
   }
 
+  useImperativeHandle(ref, () => ({
+    ask: (text: string) => {
+      if (pending) return;
+      send(text);
+    },
+  }), [pending]);
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
@@ -94,7 +106,7 @@ export function ChatWindow({
       <ChatInput onSend={send} disabled={pending} placeholder={placeholder} />
     </div>
   );
-}
+});
 
 function ChatBubble({ message }: { message: ChatMessage }) {
   if (message.role === "assistant") {
