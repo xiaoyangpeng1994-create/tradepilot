@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background: #05070a;
+  color: #c8d0db;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1a212c; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #2a323d; }
+
+@layer components {
+  .panel {
+    @apply bg-bg-panel border border-bg-edge rounded-lg;
+  }
+  .terminal-card {
+    @apply bg-bg-card border border-bg-edge rounded-md;
+  }
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-ink-muted text-sm
+           hover:bg-bg-card hover:text-ink-bright transition-colors;
+  }
+  .nav-item-active {
+    @apply bg-accent-info/10 border border-accent-info/30 text-accent-info;
+  }
+  .label-tag {
+    @apply text-[10px] tracking-widest uppercase text-ink-dim;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2
+           bg-accent-info/15 border border-accent-info/40 text-accent-info text-sm font-medium
+           hover:bg-accent-info/25 transition-colors;
+  }
+  .btn-gold {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2
+           bg-accent-gold/15 border border-accent-gold/50 text-accent-gold text-sm font-semibold
+           hover:bg-accent-gold/25 transition-colors;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2
+           bg-bg-card border border-bg-edge text-ink-base text-sm
+           hover:border-bg-edge/80 hover:bg-bg-edge transition-colors;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  .glow-edge {
+    box-shadow: 0 0 0 1px rgba(247, 147, 26, 0.15), 0 0 24px -8px rgba(247, 147, 26, 0.4);
+  }
+}

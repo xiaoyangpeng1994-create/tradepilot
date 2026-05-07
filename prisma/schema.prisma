@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  nickname        String    @unique
+  passwordHash    String
+  email           String?   @unique
+  phone           String?   @unique
+  computePts      Int       @default(2500)
+  walletBalance   Int       @default(0)        // 钱包余额（人民币 分）
+  vipLevel        String    @default("FREE")    // FREE | PRO_MONTH | PRO_YEAR
+  vipExpiresAt    DateTime?
+  parentAgentId   String?
+  agentLevel      Int       @default(0)         // 0=普通用户 1=直属代理 2=二级代理
+  createdAt       DateTime  @default(now())
+
+  parentAgent     User?     @relation("AgentTree", fields: [parentAgentId], references: [id])
+  children        User[]    @relation("AgentTree")
+
+  orders          Order[]
+  commissions     CommissionLog[] @relation("RecipientCommissions")
+  chatSessions    ChatSession[]
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // RECHARGE | SUBSCRIBE
+  amountCny   Int      // 分
+  itemCode    String   // PRO_MONTH / PRO_YEAR / PTS_500 / PTS_2000
+  status      String   @default("PENDING")
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  commissions CommissionLog[]
+}
+
+model CommissionLog {
+  id          String   @id @default(cuid())
+  orderId     String
+  recipientId String
+  payerId     String
+  payerNickname String
+  rate        Float
+  amountCny   Int
+  level       Int
+  createdAt   DateTime @default(now())
+
+  order       Order    @relation(fields: [orderId], references: [id])
+  recipient   User     @relation("RecipientCommissions", fields: [recipientId], references: [id])
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  userId    String
+  channel   String   // forex | gold | crypto | us | a-shares | academy
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages  ChatMessage[]
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  sessionId  String
+  role       String   // user | assistant
+  content    String
+  imageData  String?  // base64 (上传 K 线图时)
+  createdAt  DateTime @default(now())
+
+  session    ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
