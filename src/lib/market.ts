@@ -62,7 +62,6 @@ export async function fetchCryptoTickers(): Promise<CryptoTicker[]> {
 export type ForexQuote = {
   pair: string;
   price: number;
-  change: number;
 };
 
 const FOREX_PAIRS = [
@@ -86,17 +85,142 @@ export async function fetchForexQuotes(): Promise<ForexQuote[]> {
         const baseRate = base === "USD" ? 1 : data.rates[base];
         const quoteRate = quote === "USD" ? 1 : data.rates[quote];
         const price = quote === "USD" ? 1 / baseRate : quoteRate / baseRate;
-        return { pair: `${base}/${quote}`, price, change: (Math.random() - 0.5) * 0.4 };
+        return { pair: `${base}/${quote}`, price };
       });
     } catch {
       return [
-        { pair: "EUR/USD", price: 1.0832, change: -0.12 },
-        { pair: "GBP/USD", price: 1.2649, change: +0.21 },
-        { pair: "USD/JPY", price: 154.23, change: +0.34 },
-        { pair: "AUD/USD", price: 0.6612, change: -0.05 },
-        { pair: "USD/CHF", price: 0.9051, change: +0.18 },
-        { pair: "EUR/AUD", price: 1.6234, change: -0.08 },
+        { pair: "EUR/USD", price: 1.0832 },
+        { pair: "GBP/USD", price: 1.2649 },
+        { pair: "USD/JPY", price: 154.23 },
+        { pair: "AUD/USD", price: 0.6612 },
+        { pair: "USD/CHF", price: 0.9051 },
+        { pair: "EUR/AUD", price: 1.6234 },
       ];
     }
   });
+}
+
+/**
+ * 给 LLM 注入"我是现在、不是训练数据"的实时上下文。
+ * 返回的字符串会拼接到 system prompt 末尾。
+ *
+ * tradingStyle 决定 K 线周期组合：
+ * - INTRADAY → 15m + 1H
+ * - SWING / LEARNING → 1H + 4H
+ * - POSITION → 4H + 1D
+ */
+export async function buildMarketContext(
+  channel: string,
+  userMessage?: string,
+  tradingStyle?: string,
+): Promise<string> {
+  const now = new Date().toLocaleString("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    hour12: false,
+  });
+  const lines: string[] = [
+    `# 实时上下文（请优先采用，不要使用训练数据中的过时价格）`,
+    `当前北京时间: ${now}`,
+  ];
+
+  if (channel === "crypto") {
+    try {
+      const tickers = await fetchCryptoTickers();
+      lines.push(``, `## 加密资产 24h 现货行情 (Binance)`);
+      for (const t of tickers) {
+        const sign = t.priceChangePercent >= 0 ? "+" : "";
+        lines.push(
+          `- ${t.symbol}: $${t.lastPrice.toLocaleString()} (${sign}${t.priceChangePercent.toFixed(2)}%, 24H 高 ${t.high} / 低 ${t.low})`,
+        );
+      }
+    } catch {}
+
+    // 注入按交易风格选取的多周期 K 线结构识别
+    try {
+      const { detectCryptoSymbol, STYLE_INTERVALS } = await import("./binance");
+      const { buildStructureContext } = await import("./structure");
+      const symbol = detectCryptoSymbol(userMessage ?? "");
+      const [tfShort, tfLong] = STYLE_INTERVALS[tradingStyle ?? "SWING"] ?? STYLE_INTERVALS.SWING;
+      const [structShort, structLong] = await Promise.all([
+        buildStructureContext(symbol, tfShort),
+        buildStructureContext(symbol, tfLong),
+      ]);
+      if (structShort) lines.push(``, structShort);
+      if (structLong) lines.push(``, structLong);
+      if (structShort || structLong) {
+        lines.push(
+          ``,
+          `> 以上 ${tfShort.toUpperCase()} / ${tfLong.toUpperCase()} 结构均由后端算法基于真实 K 线计算（按用户交易风格选取）。**回答时必须使用这些价位**，不得自行虚构 OB / FVG / 流动性数字。`,
+        );
+      }
+    } catch {}
+  } else if (channel === "forex") {
+    try {
+      const quotes = await fetchForexQuotes();
+      lines.push(``, `## 主要外汇即时报价`);
+      for (const q of quotes) {
+        // change 字段当前是占位随机数，先不注入百分比，避免 AI 引用编出的数据
+        lines.push(`- ${q.pair}: ${q.price.toFixed(4)}`);
+      }
+    } catch {}
+  } else if (channel === "gold") {
+    try {
+      const { fetchGoldQuote, fetchGoldKlines, GOLD_SOURCE_LABELS } = await import("./gold");
+      const { STYLE_INTERVALS } = await import("./binance");
+      const { buildStructureContextFromCandles } = await import("./structure");
+
+      const q = await fetchGoldQuote();
+      if (!q) {
+        // 双源都挂 — 严禁喂假数据，直接告诉模型本次没有实时行情
+        lines.push(
+          ``,
+          `## 黄金现货 XAU/USD`,
+          `> ⚠️ 实时行情接入失败（Yahoo + Binance PAXG 两路均不可用）。本次回答仅做框架性分析；**绝不能引用任何具体价位数字**——不知道现价就坦率说不知道。`,
+        );
+      } else {
+        const sign = q.changePct >= 0 ? "+" : "";
+        const ageS = Math.max(0, Math.round((Date.now() - q.fetchedAt) / 1000));
+        const ageLabel = ageS < 60 ? `${ageS}s 前` : `${Math.round(ageS / 60)}min 前`;
+        lines.push(
+          ``,
+          `## 黄金现货 XAU/USD（USD/oz · 来源: ${GOLD_SOURCE_LABELS[q.source]} · 数据 ${ageLabel}）`,
+          `- 现价: $${q.price.toFixed(2)}（${sign}${q.changePct.toFixed(2)}%, ${sign}${q.change.toFixed(2)}）`,
+          `- 24H 区间: $${q.low24h.toFixed(2)} – $${q.high24h.toFixed(2)}`,
+        );
+
+        const [tfShort, tfLong] = STYLE_INTERVALS[tradingStyle ?? "SWING"] ?? STYLE_INTERVALS.SWING;
+        const [candlesShort, candlesLong] = await Promise.all([
+          fetchGoldKlines(tfShort, 200),
+          fetchGoldKlines(tfLong, 200),
+        ]);
+        const structShort =
+          candlesShort.length >= 20
+            ? buildStructureContextFromCandles(candlesShort, "XAUUSD", tfShort)
+            : "";
+        const structLong =
+          candlesLong.length >= 20
+            ? buildStructureContextFromCandles(candlesLong, "XAUUSD", tfLong)
+            : "";
+        if (structShort) lines.push(``, structShort);
+        if (structLong) lines.push(``, structLong);
+        if (structShort || structLong) {
+          lines.push(
+            ``,
+            `> 以上 ${tfShort.toUpperCase()} / ${tfLong.toUpperCase()} 黄金结构均由后端算法基于真实 K 线计算（按用户交易风格选取；4H 由 1H ×4 按 UTC 0/4/8/12/16/20 边界聚合）。**回答时必须使用这些价位**，不得自行虚构 OB / FVG / 流动性数字。`,
+          );
+        } else {
+          lines.push(
+            ``,
+            `> ⚠️ K 线数据接入不足，结构识别本次不可用；不要给出具体的 OB / FVG 价位。`,
+          );
+        }
+      }
+    } catch {}
+  }
+
+  lines.push(
+    ``,
+    `若用户询问以上未列出的标的（美股/A股/期权等），请坦率说明"暂无实时数据接入，以下为基于经验的框架分析"再给结论。`,
+  );
+  return lines.join("\n");
 }

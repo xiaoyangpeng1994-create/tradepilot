@@ -15,11 +15,16 @@ export function TopTicker() {
     let abort = false;
     const load = async () => {
       try {
-        const res = await fetch("/api/market/crypto", { cache: "no-store" });
-        if (!res.ok) throw new Error();
-        const data = (await res.json()) as Ticker[];
+        const [cryptoRes, goldRes] = await Promise.all([
+          fetch("/api/market/crypto", { cache: "no-store" }),
+          fetch("/api/market/gold", { cache: "no-store" }),
+        ]);
+        if (!cryptoRes.ok) throw new Error();
+        const crypto = (await cryptoRes.json()) as Ticker[];
+        const gold = goldRes.ok ? ((await goldRes.json()) as Ticker[]) : [];
         if (!abort) {
-          setTickers(data);
+          // 黄金放最前显眼：现货 XAU 先看，再 BTC/ETH/...
+          setTickers([...gold, ...crypto]);
           setStale(false);
         }
       } catch {
@@ -37,10 +42,10 @@ export function TopTicker() {
   const items = tickers.length
     ? tickers.map(formatTicker)
     : [
+        "XAU --",
         "BTC --",
         "ETH --",
-        "SOL --",
-        "正在连接 BINANCE LIVE FEED...",
+        "正在连接 LIVE FEED...",
       ];
 
   const string = items.join("    •    ") + "    •    ";
@@ -58,7 +63,7 @@ export function TopTicker() {
             stale ? "bg-accent-gold" : "bg-accent-razer"
           }`}
         />
-        {stale ? "FEED_OFFLINE" : "BINANCE_LIVE"}
+        {stale ? "FEED_OFFLINE" : "LIVE_FEED"}
       </span>
       <div className="flex whitespace-nowrap py-1.5 animate-marquee flex-1 min-w-0">
         <span className="px-4">{doubled}</span>
@@ -69,6 +74,12 @@ export function TopTicker() {
 }
 
 function formatTicker(t: Ticker): string {
+  // XAU 显示成 "XAU $2,421" 而不是经过 USDT 替换的 "XAUUSD"
+  if (t.symbol === "XAUUSD") {
+    const price = t.lastPrice.toLocaleString("en-US", { maximumFractionDigits: 2 });
+    const sign = t.priceChangePercent >= 0 ? "+" : "";
+    return `XAU $${price} ${sign}${t.priceChangePercent.toFixed(2)}%`;
+  }
   const symbol = t.symbol.replace("USDT", "");
   const price =
     t.lastPrice >= 100
