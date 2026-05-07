@@ -25,11 +25,13 @@ export async function POST(req: NextRequest) {
   const cost = image ? COST_WITH_IMAGE : COST_TEXT;
 
   let chatSessionId: string | null = null;
+  let ptsBalanceAfter: number | null = null;
+  let isVip = false;
 
   if (userId) {
     // 校验 + 扣点 + 写 user 消息 三步原子化，任一失败回滚（不影响 streaming 阶段）
     try {
-      chatSessionId = await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx) => {
         const user = await tx.user.findUnique({
           where: { id: userId },
           select: { computePts: true, vipLevel: true, vipExpiresAt: true },
@@ -75,8 +77,15 @@ export async function POST(req: NextRequest) {
           data: { updatedAt: new Date() },
         });
 
-        return cs.id;
+        return {
+          sessionId: cs.id,
+          balanceAfter: isVipActive ? user.computePts : user.computePts - cost,
+          isVipActive,
+        };
       });
+      chatSessionId = result.sessionId;
+      ptsBalanceAfter = result.balanceAfter;
+      isVip = result.isVipActive;
     } catch (e) {
       const msg = (e as Error).message;
       if (msg === "USER_NOT_FOUND") {
@@ -150,6 +159,9 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       "X-Accel-Buffering": "no",
+      "X-Pts-Cost": String(cost),
+      ...(ptsBalanceAfter !== null ? { "X-Pts-Balance": String(ptsBalanceAfter) } : {}),
+      "X-Pts-Vip": String(isVip),
     },
   });
 }
