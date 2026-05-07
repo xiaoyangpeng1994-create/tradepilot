@@ -1,13 +1,15 @@
 // 商品定价中心。amountCny 单位为分。
-// 后续接真实支付时只需改这里 + /api/order/checkout 的支付链路。
+// 当前算力点汇率：¥1 = 50 pts（即 1 pt = ¥0.02），由 PTS_PER_YUAN 控制。
+// 自定义金额走 /api/order/checkout 的 PTS_CUSTOM 路径。
 
 export type ItemCode =
   | "PRO_MONTH"
   | "PRO_YEAR"
+  | "PTS_50"
+  | "PTS_100"
+  | "PTS_300"
   | "PTS_500"
-  | "PTS_2000"
-  | "PTS_5000"
-  | "PTS_20000";
+  | "PTS_1000";
 
 export type ItemKind = "SUBSCRIBE" | "RECHARGE";
 
@@ -17,6 +19,22 @@ export interface PricingItem {
   name: string;
   amountCny: number; // 分
   meta?: { pts?: number; vipDays?: number };
+}
+
+export const PTS_PER_YUAN = 50;
+
+// 自定义充值范围（元）
+export const CUSTOM_RECHARGE_MIN_YUAN = 1;
+export const CUSTOM_RECHARGE_MAX_YUAN = 10000;
+
+function ptsPack(yuan: number): PricingItem {
+  return {
+    code: `PTS_${yuan}` as ItemCode,
+    kind: "RECHARGE",
+    name: `充值 ¥${yuan}`,
+    amountCny: yuan * 100,
+    meta: { pts: yuan * PTS_PER_YUAN },
+  };
 }
 
 export const PRICING: Record<ItemCode, PricingItem> = {
@@ -34,10 +52,11 @@ export const PRICING: Record<ItemCode, PricingItem> = {
     amountCny: 499900,
     meta: { vipDays: 365 },
   },
-  PTS_500: { code: "PTS_500", kind: "RECHARGE", name: "算力 500 点", amountCny: 1000, meta: { pts: 500 } },
-  PTS_2000: { code: "PTS_2000", kind: "RECHARGE", name: "算力 2,000 点", amountCny: 3500, meta: { pts: 2000 } },
-  PTS_5000: { code: "PTS_5000", kind: "RECHARGE", name: "算力 5,000 点", amountCny: 8000, meta: { pts: 5000 } },
-  PTS_20000: { code: "PTS_20000", kind: "RECHARGE", name: "算力 20,000 点", amountCny: 29900, meta: { pts: 20000 } },
+  PTS_50: ptsPack(50),
+  PTS_100: ptsPack(100),
+  PTS_300: ptsPack(300),
+  PTS_500: ptsPack(500),
+  PTS_1000: ptsPack(1000),
 };
 
 export function fenToYuan(fen: number): string {

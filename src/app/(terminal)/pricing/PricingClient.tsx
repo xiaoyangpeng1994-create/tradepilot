@@ -2,7 +2,13 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
-import { fenToYuan, ItemCode } from "@/lib/pricing";
+import {
+  fenToYuan,
+  ItemCode,
+  PTS_PER_YUAN,
+  CUSTOM_RECHARGE_MIN_YUAN,
+  CUSTOM_RECHARGE_MAX_YUAN,
+} from "@/lib/pricing";
 
 type Initial = {
   isLoggedIn: boolean;
@@ -12,29 +18,35 @@ type Initial = {
   vipExpiresAt: string | null;
 };
 
+type BuyPayload = { itemCode: string; customAmountYuan?: number };
+
 export function PricingClient({ initial }: { initial: Initial }) {
   const router = useRouter();
   const [tab, setTab] = useState<"VIP" | "PTS">("VIP");
-  const [buying, setBuying] = useState<ItemCode | null>(null);
+  const [buying, setBuying] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   const isVipActive =
     initial.vipLevel !== "FREE" &&
     (!initial.vipExpiresAt || new Date(initial.vipExpiresAt).getTime() > Date.now());
 
-  async function buy(itemCode: ItemCode, label: string) {
+  async function buy(payload: BuyPayload, label: string) {
     if (!initial.isLoggedIn) {
       setToast({ kind: "err", text: "请先登录后再购买" });
       return;
     }
     if (!confirm(`确认购买「${label}」？开发模式将立即模拟支付完成。`)) return;
-    setBuying(itemCode);
+    const key =
+      payload.customAmountYuan != null
+        ? `CUSTOM:${payload.customAmountYuan}`
+        : payload.itemCode;
+    setBuying(key);
     setToast(null);
     try {
       const res = await fetch("/api/order/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemCode }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -158,8 +170,8 @@ function VipPanel({
   buying,
   onBuy,
 }: {
-  buying: ItemCode | null;
-  onBuy: (code: ItemCode, label: string) => void;
+  buying: string | null;
+  onBuy: (payload: BuyPayload, label: string) => void;
 }) {
   return (
     <div className="space-y-6">
@@ -189,7 +201,7 @@ function VipPanel({
           unit="/月"
           desc="灵活试用，按月续费"
           buying={buying === "PRO_MONTH"}
-          onBuy={() => onBuy("PRO_MONTH", "月度专业版 ¥599/月")}
+          onBuy={() => onBuy({ itemCode: "PRO_MONTH" }, "月度专业版 ¥599/月")}
         />
         <PriceCard
           title="年度旗舰版"
@@ -199,7 +211,7 @@ function VipPanel({
           highlight
           badge="YEARLY_PRO_SAVINGS"
           buying={buying === "PRO_YEAR"}
-          onBuy={() => onBuy("PRO_YEAR", "年度旗舰版 ¥4,999/年")}
+          onBuy={() => onBuy({ itemCode: "PRO_YEAR" }, "年度旗舰版 ¥4,999/年")}
         />
       </div>
     </div>
@@ -210,56 +222,115 @@ function PtsPanel({
   buying,
   onBuy,
 }: {
-  buying: ItemCode | null;
-  onBuy: (code: ItemCode, label: string) => void;
+  buying: string | null;
+  onBuy: (payload: BuyPayload, label: string) => void;
 }) {
-  const packs: Array<{ code: ItemCode; pts: number; price: number; tag?: string }> = [
-    { code: "PTS_500", pts: 500, price: 1000 },
-    { code: "PTS_2000", pts: 2000, price: 3500, tag: "性价比" },
-    { code: "PTS_5000", pts: 5000, price: 8000, tag: "推荐" },
-    { code: "PTS_20000", pts: 20000, price: 29900, tag: "大额优惠" },
-  ];
+  const fixedYuan = [50, 100, 300, 500, 1000];
 
   return (
     <div className="space-y-5">
       <div>
         <div className="text-ink-bright text-base font-bold tracking-wide">算力点数（pts）</div>
         <div className="text-xs text-ink-muted mt-1">
-          1 次文本对话消耗 1 pt；上传 K 线图深度推理消耗 5 pts。VIP 用户不消耗算力。
+          ¥1 = {PTS_PER_YUAN} pts；1 次文本对话消耗 1 pt，上传 K 线图深度推理消耗 5 pts。VIP 用户不消耗算力。
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {packs.map((p) => {
-          const yuanPerPt = p.price / 100 / p.pts;
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        {fixedYuan.map((yuan) => {
+          const code = `PTS_${yuan}` as ItemCode;
+          const pts = yuan * PTS_PER_YUAN;
+          const isBuying = buying === code;
           return (
             <div
-              key={p.code}
-              className="terminal-card p-4 flex flex-col gap-3 hover:border-accent-info/40 transition-colors"
+              key={code}
+              className="terminal-card p-4 flex flex-col gap-2 hover:border-accent-info/40 transition-colors"
             >
-              <div className="flex items-start justify-between">
-                <div className="text-accent-neon text-xl font-light">
-                  {p.pts.toLocaleString()}
-                </div>
-                {p.tag && (
-                  <span className="text-[9px] tracking-widest text-accent-gold border border-accent-gold/40 rounded-sm px-1.5 py-0.5">
-                    {p.tag}
-                  </span>
-                )}
+              <div className="text-ink-bright text-2xl font-bold">¥{yuan}</div>
+              <div className="text-[11px] text-accent-neon">
+                {pts.toLocaleString()} pts
               </div>
-              <div className="text-[10px] text-ink-dim">
-                ≈ ¥{yuanPerPt.toFixed(3)} / pt
-              </div>
-              <div className="text-ink-bright text-2xl font-bold">¥{fenToYuan(p.price)}</div>
               <button
-                disabled={buying === p.code}
-                onClick={() => onBuy(p.code, `${p.pts.toLocaleString()} 算力点 ¥${fenToYuan(p.price)}`)}
-                className="btn-primary mt-auto disabled:opacity-50"
+                disabled={isBuying}
+                onClick={() => onBuy({ itemCode: code }, `¥${yuan} → ${pts.toLocaleString()} pts`)}
+                className="btn-primary mt-auto disabled:opacity-50 text-xs"
               >
-                {buying === p.code ? "处理中..." : "立即充值"}
+                {isBuying ? "处理中..." : "立即充值"}
               </button>
             </div>
           );
         })}
+      </div>
+
+      <CustomRecharge buying={buying} onBuy={onBuy} />
+    </div>
+  );
+}
+
+function CustomRecharge({
+  buying,
+  onBuy,
+}: {
+  buying: string | null;
+  onBuy: (payload: BuyPayload, label: string) => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const yuan = Number(amount);
+  const valid =
+    Number.isInteger(yuan) &&
+    yuan >= CUSTOM_RECHARGE_MIN_YUAN &&
+    yuan <= CUSTOM_RECHARGE_MAX_YUAN;
+  const pts = valid ? yuan * PTS_PER_YUAN : 0;
+  const isBuying = buying?.startsWith("CUSTOM:") ?? false;
+
+  return (
+    <div className="terminal-card p-4 border-accent-info/20">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="size-1.5 bg-accent-info rounded-full animate-pulseLine" />
+        <span className="text-[10px] tracking-widest uppercase text-ink-base">
+          自定义金额 (CUSTOM_RECHARGE)
+        </span>
+      </div>
+      <div className="flex items-end gap-3 flex-wrap">
+        <div className="flex-1 min-w-[180px]">
+          <div className="label-tag mb-1">充值金额（元）</div>
+          <div className="flex items-center bg-bg-card border border-bg-edge rounded-md px-3 py-2 focus-within:border-accent-info/60">
+            <span className="text-ink-dim text-sm mr-2">¥</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={CUSTOM_RECHARGE_MIN_YUAN}
+              max={CUSTOM_RECHARGE_MAX_YUAN}
+              step={1}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={`${CUSTOM_RECHARGE_MIN_YUAN}-${CUSTOM_RECHARGE_MAX_YUAN}`}
+              className="flex-1 bg-transparent outline-none text-ink-bright text-sm"
+            />
+          </div>
+        </div>
+        <div className="min-w-[140px]">
+          <div className="label-tag mb-1">将获得</div>
+          <div className="text-accent-neon text-lg font-bold">
+            {valid ? pts.toLocaleString() : "—"}{" "}
+            <span className="text-[10px] text-ink-dim font-normal">pts</span>
+          </div>
+        </div>
+        <button
+          disabled={!valid || isBuying}
+          onClick={() =>
+            onBuy(
+              { itemCode: "PTS_CUSTOM", customAmountYuan: yuan },
+              `自定义充值 ¥${yuan} → ${pts.toLocaleString()} pts`,
+            )
+          }
+          className="btn-primary text-xs disabled:opacity-50"
+        >
+          {isBuying ? "处理中..." : "立即充值"}
+        </button>
+      </div>
+      <div className="text-[10px] text-ink-dim mt-2">
+        支持 ¥{CUSTOM_RECHARGE_MIN_YUAN}-¥{CUSTOM_RECHARGE_MAX_YUAN} 整数金额；当前汇率 ¥1 = {PTS_PER_YUAN} pts。
       </div>
     </div>
   );
