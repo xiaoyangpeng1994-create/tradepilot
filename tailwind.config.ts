@@ -16,12 +16,12 @@ export default {
           edge: "#1a212c",
         },
         accent: {
-          gold: "#f7931a",
-          neon: "#39d98a",
+          gold: "#f7931a",     // VIP 专用，唯一保留的"非绿"装饰色
+          neon: "#44D62C",     // 统一为雷蛇绿（原 #39d98a 薄荷绿）
           danger: "#ef4444",
-          info: "#44D62C",      // razer green —— 主色 (原 #3b82f6 蓝)
-          razer: "#44D62C",     // 显式别名
-          purple: "#a855f7",
+          info: "#44D62C",     // razer green —— 主色 (原 #3b82f6 蓝)
+          razer: "#44D62C",    // 显式别名
+          purple: "#44D62C",   // 统一为雷蛇绿（原 #a855f7 紫）
         },
         ink: {
           dim: "#5b6470",
