@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /agent
+Disallow: /orders
+Disallow: /profile
+Disallow: /pricing
+
+Sitemap: https://example.com/sitemap.xml

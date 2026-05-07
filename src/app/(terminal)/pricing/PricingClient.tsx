@@ -166,6 +166,55 @@ function TabButton({
   );
 }
 
+function VipRoiCalc() {
+  const [perDay, setPerDay] = useState(10);
+  const monthlyPts = perDay * 30;
+  const equivYuan = Math.ceil(monthlyPts / PTS_PER_YUAN);
+  const vipBeats = equivYuan >= 599;
+
+  return (
+    <div className="terminal-card p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="size-1.5 bg-accent-razer rounded-full animate-pulseLine" />
+        <span className="text-[10px] tracking-widest uppercase text-ink-base">
+          VIP 性价比测算 (ROI_CALCULATOR)
+        </span>
+      </div>
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-xs text-ink-muted">假设你每天进行</span>
+        <input
+          type="range"
+          min={1}
+          max={50}
+          value={perDay}
+          onChange={(e) => setPerDay(Number(e.target.value))}
+          className="flex-1 min-w-[140px] accent-accent-razer"
+        />
+        <span className="text-accent-razer text-base font-bold">{perDay}</span>
+        <span className="text-xs text-ink-muted">次文本对话</span>
+      </div>
+      <div className="text-xs text-ink-base leading-relaxed">
+        每月预计消耗 <span className="text-accent-razer font-bold">{monthlyPts.toLocaleString()} pts</span>
+        ，等价充值 <span className="text-accent-razer font-bold">¥{equivYuan}</span>
+        ；月度 VIP 仅 ¥599 含
+        <span className="text-accent-gold"> 加密推送 / 策略订阅 / 风控工具</span>{" "}
+        等独家功能。
+      </div>
+      <div
+        className={`text-xs px-3 py-2 rounded border ${
+          vipBeats
+            ? "border-accent-razer/50 bg-accent-razer/10 text-accent-razer"
+            : "border-bg-edge bg-bg-card/50 text-ink-muted"
+        }`}
+      >
+        {vipBeats
+          ? `✓ 你的使用强度下，VIP 已比充值更划算（省 ¥${equivYuan - 599} + 解锁全部特权）`
+          : "💡 当前频次充值更便宜；但若加上 K 线深度分析（5pt/次）或更密集对话，VIP 立刻回本"}
+      </div>
+    </div>
+  );
+}
+
 function VipPanel({
   buying,
   onBuy,
@@ -193,6 +242,8 @@ function VipPanel({
         <Feature title="风控大师工具" desc="解锁全功能仓位计算器与多周期共振演算矩阵。" iconBg="bg-accent-neon/15" icon={<ShieldIcon />} />
         <Feature title="专属策略订阅" desc="每日推送高盈亏比 SMC/ICT 交易架构模板。" iconBg="bg-accent-gold/15" icon={<TargetIcon />} />
       </div>
+
+      <VipRoiCalc />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
         <PriceCard
