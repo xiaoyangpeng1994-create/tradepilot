@@ -27,52 +27,72 @@ export async function POST(req: NextRequest) {
   let chatSessionId: string | null = null;
 
   if (userId) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { computePts: true, vipLevel: true, vipExpiresAt: true },
-    });
-    if (!user) return new Response("user not found", { status: 404 });
+    // 校验 + 扣点 + 写 user 消息 三步原子化，任一失败回滚（不影响 streaming 阶段）
+    try {
+      chatSessionId = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { computePts: true, vipLevel: true, vipExpiresAt: true },
+        });
+        if (!user) throw new Error("USER_NOT_FOUND");
 
-    const isVipActive =
-      user.vipLevel !== "FREE" &&
-      (!user.vipExpiresAt || user.vipExpiresAt.getTime() > Date.now());
+        const isVipActive =
+          user.vipLevel !== "FREE" &&
+          (!user.vipExpiresAt || user.vipExpiresAt.getTime() > Date.now());
 
-    if (!isVipActive && user.computePts < cost) {
-      return new Response(
-        JSON.stringify({ error: "INSUFFICIENT_PTS", needed: cost, have: user.computePts }),
-        { status: 402, headers: { "Content-Type": "application/json" } },
-      );
-    }
+        if (!isVipActive && user.computePts < cost) {
+          throw new Error(
+            JSON.stringify({ code: "INSUFFICIENT_PTS", needed: cost, have: user.computePts }),
+          );
+        }
 
-    const existing = await prisma.chatSession.findFirst({
-      where: { userId, channel },
-      orderBy: { updatedAt: "desc" },
-    });
-    const cs =
-      existing ??
-      (await prisma.chatSession.create({ data: { userId, channel } }));
-    chatSessionId = cs.id;
+        const existing = await tx.chatSession.findFirst({
+          where: { userId, channel },
+          orderBy: { updatedAt: "desc" },
+        });
+        const cs =
+          existing ??
+          (await tx.chatSession.create({ data: { userId, channel } }));
 
-    await prisma.chatMessage.create({
-      data: {
-        sessionId: cs.id,
-        role: "user",
-        content: message,
-        imageData: image || null,
-      },
-    });
+        if (!isVipActive) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { computePts: { decrement: cost } },
+          });
+        }
 
-    if (!isVipActive) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { computePts: { decrement: cost } },
+        await tx.chatMessage.create({
+          data: {
+            sessionId: cs.id,
+            role: "user",
+            content: message,
+            imageData: image || null,
+          },
+        });
+
+        await tx.chatSession.update({
+          where: { id: cs.id },
+          data: { updatedAt: new Date() },
+        });
+
+        return cs.id;
       });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg === "USER_NOT_FOUND") {
+        return new Response("user not found", { status: 404 });
+      }
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.code === "INSUFFICIENT_PTS") {
+          return new Response(
+            JSON.stringify({ error: "INSUFFICIENT_PTS", needed: parsed.needed, have: parsed.have }),
+            { status: 402, headers: { "Content-Type": "application/json" } },
+          );
+        }
+      } catch {}
+      return new Response("transaction failed", { status: 500 });
     }
-
-    await prisma.chatSession.update({
-      where: { id: cs.id },
-      data: { updatedAt: new Date() },
-    });
   }
 
   const model = getProModel();

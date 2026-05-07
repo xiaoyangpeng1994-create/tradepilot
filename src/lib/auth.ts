@@ -13,7 +13,8 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.nickname || !credentials?.password) return null;
-        const user = await prisma.user.findUnique({ where: { nickname: credentials.nickname } });
+        const nickname = credentials.nickname.trim().toLowerCase();
+        const user = await prisma.user.findUnique({ where: { nickname } });
         if (!user) return null;
         const ok = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!ok) return null;

@@ -17,7 +17,7 @@ const NAV: NavItem[] = [
   { href: "/agent", label: "代理商中心", icon: <IconUsers />, group: "feature" },
 ];
 
-export function Sidebar({ pts = 2500 }: { pts?: number }) {
+export function Sidebar({ pts = 2500, isVipActive = false }: { pts?: number; isVipActive?: boolean }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const channels = NAV.filter((n) => n.group === "channel");
@@ -41,9 +41,15 @@ export function Sidebar({ pts = 2500 }: { pts?: number }) {
         <div className="text-[11px] text-accent-neon tracking-wider">STANDARD_SSL_PROXY</div>
         <div>
           <div className="text-[10px] text-ink-dim uppercase tracking-widest">算力资源池</div>
-          <div className="text-2xl text-ink-bright font-light">
-            {pts.toLocaleString()} <span className="text-[10px] text-ink-dim">pts</span>
-          </div>
+          {isVipActive ? (
+            <div className="text-2xl text-accent-gold font-light flex items-baseline gap-1.5">
+              ∞ <span className="text-[10px] text-accent-gold tracking-widest uppercase">VIP 无限算力</span>
+            </div>
+          ) : (
+            <div className="text-2xl text-ink-bright font-light">
+              {pts.toLocaleString()} <span className="text-[10px] text-ink-dim">pts</span>
+            </div>
+          )}
         </div>
         <Link href="/pricing" className="btn-primary w-full">
           提升至专业版 (VIP)

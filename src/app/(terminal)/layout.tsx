@@ -8,12 +8,18 @@ import { prisma } from "@/lib/prisma";
 export default async function TerminalLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   let pts = 2500;
+  let isVipActive = false;
   if (session?.user?.id) {
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { computePts: true },
+      select: { computePts: true, vipLevel: true, vipExpiresAt: true },
     });
-    if (user) pts = user.computePts;
+    if (user) {
+      pts = user.computePts;
+      isVipActive =
+        user.vipLevel !== "FREE" &&
+        (!user.vipExpiresAt || user.vipExpiresAt.getTime() > Date.now());
+    }
   }
 
   return (
@@ -21,7 +27,7 @@ export default async function TerminalLayout({ children }: { children: React.Rea
       <TopTicker />
       <div className="flex flex-1 min-h-0">
         <div className="flex flex-col">
-          <Sidebar pts={pts} />
+          <Sidebar pts={pts} isVipActive={isVipActive} />
         </div>
         <main className="flex-1 grid-bg overflow-hidden flex flex-col">
           {children}

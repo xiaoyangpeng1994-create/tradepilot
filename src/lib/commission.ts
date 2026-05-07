@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 
-const RATE_LEVEL_1 = 0.166; // 直推 16.6%
-const RATE_LEVEL_2 = 0.15;  // 二级 15%
+const RATE_LEVEL_1 = 0.2;  // 直推 20%
+const RATE_LEVEL_2 = 0.1;  // 二级 10%
 
 export async function settleCommission(orderId: string) {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -32,6 +32,10 @@ export async function settleCommission(orderId: string) {
   }
 
   for (const l of logs) {
+    const note = `来自 ${buyer.nickname} 的 ${order.itemCode} 订单 ${order.id} · ${
+      l.level === 1 ? "直推" : "二级"
+    } ${(l.rate * 100).toFixed(0)}%`;
+
     await prisma.commissionLog.create({
       data: {
         orderId: order.id,
@@ -41,6 +45,7 @@ export async function settleCommission(orderId: string) {
         rate: l.rate,
         amountCny: l.amount,
         level: l.level,
+        note,
       },
     });
     await prisma.user.update({
@@ -51,7 +56,6 @@ export async function settleCommission(orderId: string) {
 }
 
 export function applyOrderEffects(itemCode: string) {
-  // 返回订单完成时对买家账户的影响
   switch (itemCode) {
     case "PRO_MONTH":
       return { vipLevel: "PRO_MONTH", vipDays: 30 };

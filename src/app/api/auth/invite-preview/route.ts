@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   }
 
   const inviter = await prisma.user.findFirst({
-    where: { OR: [{ id: code }, { nickname: code }] },
+    where: { OR: [{ id: code }, { nickname: code.toLowerCase() }] },
     select: { nickname: true },
   });
 

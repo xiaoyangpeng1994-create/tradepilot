@@ -13,7 +13,7 @@ model User {
   passwordHash    String
   email           String?   @unique
   phone           String?   @unique
-  computePts      Int       @default(2500)
+  computePts      Int       @default(500)
   walletBalance   Int       @default(0)        // 钱包余额（人民币 分）
   vipLevel        String    @default("FREE")    // FREE | PRO_MONTH | PRO_YEAR
   vipExpiresAt    DateTime?
@@ -52,6 +52,7 @@ model CommissionLog {
   rate        Float
   amountCny   Int
   level       Int
+  note        String?
   createdAt   DateTime @default(now())
 
   order       Order    @relation(fields: [orderId], references: [id])
