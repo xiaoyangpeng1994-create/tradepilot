@@ -15,8 +15,12 @@ export function TopTicker() {
   const string = TICKER_ITEMS.join("  •  ") + "  •  ";
   const doubled = string + string;
   return (
-    <div className="border-b border-bg-edge bg-bg-panel/60 overflow-hidden text-[10px] tracking-widest uppercase text-ink-dim">
-      <div className="flex whitespace-nowrap py-1.5 animate-marquee">
+    <div className="border-b border-bg-edge bg-bg-panel/60 overflow-hidden text-[10px] tracking-widest uppercase text-ink-dim flex items-stretch">
+      <span className="shrink-0 px-3 py-1.5 text-accent-gold border-r border-bg-edge bg-bg-card/60 flex items-center gap-1.5">
+        <span className="size-1.5 bg-accent-gold rounded-full animate-pulseLine" />
+        DEMO_FEED
+      </span>
+      <div className="flex whitespace-nowrap py-1.5 animate-marquee flex-1 min-w-0">
         <span className="px-4">{doubled}</span>
         <span className="px-4">{doubled}</span>
       </div>

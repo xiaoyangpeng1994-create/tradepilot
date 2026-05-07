@@ -38,6 +38,12 @@ export default async function TerminalLayout({ children }: { children: React.Rea
           <AutoPushPanel />
         </aside>
       </div>
+      <footer className="border-t border-bg-edge bg-bg-panel/60 px-6 py-1.5 flex items-center justify-between text-[10px] text-ink-dim tracking-wide">
+        <span>
+          ⚠ 行情滚动条、机构脉冲、AI 预测胜率均为<span className="text-accent-gold">演示数据</span>，不构成任何投资建议。市场有风险，决策需独立判断。
+        </span>
+        <span className="text-ink-dim/70">DEV_BUILD · v0.1</span>
+      </footer>
     </div>
   );
 }
