@@ -210,27 +210,35 @@ function SidePanels({ nickname }: { nickname: string }) {
 
 function InvitePanel({ nickname }: { nickname: string }) {
   const [origin, setOrigin] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"link" | "template" | null>(null);
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
   const url = origin ? `${origin}/register?ref=${encodeURIComponent(nickname)}` : "";
+  const template = url
+    ? `🚀 我在用「彭哥 AI 交易终端」做交易决策辅助，Gemini 大模型 + SMC/ICT 框架，覆盖外汇/黄金/加密/美股/A股 5 大频道。
 
-  async function copy() {
-    if (!url) return;
+通过我的链接注册：
+${url}
+
+✅ 立即赠 500 算力点（够深度体验所有频道）
+✅ 用我的邀请码后我也能拿 200pt 奖励
+✅ 你后续充值/订阅，我可获返佣，等于双方共赢`
+    : "";
+
+  async function copy(text: string, kind: "link" | "template") {
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // 兜底：选中输入框让用户手动复制
-    }
+      await navigator.clipboard.writeText(text);
+      setCopied(kind);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {}
   }
 
   return (
     <div className="terminal-card p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <span className="size-1.5 bg-accent-info rounded-full animate-pulseLine" />
+        <span className="size-1.5 bg-accent-razer rounded-full animate-pulseLine" />
         <span className="text-[10px] tracking-widest uppercase text-ink-base">
           专属邀请链接 (REFERRAL_LINK)
         </span>
@@ -241,9 +249,20 @@ function InvitePanel({ nickname }: { nickname: string }) {
         onFocus={(e) => e.currentTarget.select()}
         className="w-full bg-bg-card border border-bg-edge rounded-md px-2 py-1.5 text-[11px] text-ink-bright outline-none"
       />
-      <button onClick={copy} className="btn-primary w-full text-xs">
-        {copied ? "✓ 已复制" : "复制邀请链接"}
-      </button>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => copy(url, "link")}
+          className="btn-ghost text-xs"
+        >
+          {copied === "link" ? "✓ 已复制" : "仅复制链接"}
+        </button>
+        <button
+          onClick={() => copy(template, "template")}
+          className="btn-primary text-xs"
+        >
+          {copied === "template" ? "✓ 已复制" : "复制 + 推广话术"}
+        </button>
+      </div>
       <div className="text-[10px] text-ink-dim leading-relaxed">
         新用户通过此链接注册，自动成为您的直推；其充值将按 20% / 10% 派发分润，且您可即时获 +200 算力点奖励。
       </div>

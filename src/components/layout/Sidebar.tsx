@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { href: "/twitter", label: "X (推特) 大神追踪", icon: <IconTwitter />, group: "feature" },
   { href: "/agent", label: "代理商中心", icon: <IconUsers />, group: "feature" },
   { href: "/orders", label: "账单中心", icon: <IconReceipt />, group: "feature" },
+  { href: "/profile", label: "个人中心", icon: <IconUser />, group: "feature" },
 ];
 
 export function Sidebar({ pts = 2500, isVipActive = false }: { pts?: number; isVipActive?: boolean }) {
@@ -121,7 +122,12 @@ export function Sidebar({ pts = 2500, isVipActive = false }: { pts?: number; isV
         <div className="border-t border-bg-edge p-4 text-[11px] text-ink-muted">
           {session?.user ? (
             <div className="space-y-1">
-              <div className="text-ink-base truncate">{session.user.name || session.user.email}</div>
+              <Link
+                href="/profile"
+                className="text-ink-base truncate hover:text-accent-razer block transition-colors"
+              >
+                {session.user.name || session.user.email} →
+              </Link>
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
                 className="text-accent-danger hover:text-red-400"
@@ -189,4 +195,7 @@ function IconUsers() {
 }
 function IconReceipt() {
   return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 1v14l2-1.5L7 15l2-1.5L11 15l2-1.5V1H3z" /><path d="M5 5h6M5 8h6M5 11h4" /></svg>;
+}
+function IconUser() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="5" r="3" /><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" /></svg>;
 }
