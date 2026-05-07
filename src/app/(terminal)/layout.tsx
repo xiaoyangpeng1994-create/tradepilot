@@ -31,7 +31,7 @@ export default async function TerminalLayout({ children }: { children: React.Rea
       </div>
       <footer className="border-t border-bg-edge bg-bg-panel/60 px-3 sm:px-6 py-1.5 flex items-center justify-between gap-3 text-[10px] text-ink-dim tracking-wide">
         <span className="line-clamp-2 sm:line-clamp-1">
-          ⚠ 行情滚动条等均为<span className="text-accent-gold">演示数据</span>，不构成投资建议；交易有风险，决策请独立判断。
+          ⚠ AI 输出与部分演示模块（如 ETF 净流入示例）<span className="text-accent-gold">仅供参考</span>，不构成投资建议；交易有风险，决策请独立判断。
         </span>
         <span className="shrink-0 text-ink-dim/70 hidden sm:inline">DEV_BUILD · v0.1</span>
       </footer>

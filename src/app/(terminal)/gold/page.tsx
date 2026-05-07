@@ -9,6 +9,12 @@ export default function GoldPage() {
         channel="gold"
         intro={`黄金专属终端已就绪。我正在监控伦敦金、纽约金的跨市订单流以及美元指数的相关性。你可以问我 XAU/USD 的关键支撑/阻力、央行购金动向、ETF 净流入等任何问题，我会结合 Gemini 大模型给出多周期共振分析。`}
         placeholder="询问黄金行情或上传 XAU/USD K 线..."
+        suggestions={[
+          "XAU/USD 当前周线级别还有哪些未触发的流动性？",
+          "近一周 SPDR 黄金 ETF 持仓变动暗示什么？",
+          "中国央行连续增持对金价中长期意味着什么？",
+          "美债实际收益率上行时该如何对冲多头？",
+        ]}
       />
     </>
   );

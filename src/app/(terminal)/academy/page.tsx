@@ -73,6 +73,12 @@ export default function AcademyPage() {
           channel="academy"
           intro="你好，我是彭哥 AI 助教。可以问我任意一节课的核心逻辑、追问难点，或者把你不懂的盘面截图发上来，我会按 SMC/ICT 框架一步步拆解。"
           placeholder="问问 AI 助教：这个课程的逻辑是什么？"
+          suggestions={[
+            "PINBAR 见顶/见底的关键确认条件是什么？",
+            "怎么分辨「真」订单块和「假」订单块？",
+            "FVG 缺口回补概率有没有量化标准？",
+            "扫损后真破位 vs 假突破怎么区分？",
+          ]}
         />
       </div>
     </>
