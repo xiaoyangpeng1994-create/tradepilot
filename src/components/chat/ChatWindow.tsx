@@ -21,7 +21,7 @@ export type ChatWindowHandle = {
 
 export const ChatWindow = forwardRef<ChatWindowHandle, {
   channel: string;
-  intro: string;
+  intro?: string;
   placeholder?: string;
   /** 留空状态下显示的快捷示例问题 */
   suggestions?: string[];
@@ -37,19 +37,25 @@ export const ChatWindow = forwardRef<ChatWindowHandle, {
   const { status } = useSession();
   const isLoggedIn = status === "authenticated";
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "intro",
-      role: "assistant",
-      content: intro,
-      ts: nowTs(),
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    intro
+      ? [
+          {
+            id: "intro",
+            role: "assistant",
+            content: intro,
+            ts: nowTs(),
+          },
+        ]
+      : [],
+  );
   const [pending, setPending] = useState(false);
   const [registerWall, setRegisterWall] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const onlyIntro = messages.length === 1 && messages[0].id === "intro";
+  const isEmptyState =
+    messages.length === 0 ||
+    (messages.length === 1 && messages[0].id === "intro");
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -174,7 +180,7 @@ export const ChatWindow = forwardRef<ChatWindowHandle, {
           ),
         )}
         {pending && <TypingDots />}
-        {onlyIntro && suggestions && suggestions.length > 0 && (
+        {isEmptyState && suggestions && suggestions.length > 0 && (
           <SuggestionCards suggestions={suggestions} onPick={(s) => send(s)} />
         )}
       </div>
@@ -298,6 +304,18 @@ function SuggestionCards({
             {s}
           </button>
         ))}
+      </div>
+      <div className="text-[11px] text-ink-dim mt-3 max-w-[680px] leading-relaxed flex items-start gap-2">
+        <svg viewBox="0 0 16 16" className="size-3.5 mt-0.5 shrink-0 text-accent-razer" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="2" y="4" width="12" height="9" rx="1" />
+          <circle cx="8" cy="8.5" r="2" />
+          <path d="M5 4l1-1.5h4L11 4" />
+        </svg>
+        <span>
+          也可以点击下方<span className="text-accent-razer">相机</span>图标，
+          <span className="text-ink-base">拍摄或上传 K 线截图</span>
+          ，AI 会按 SMC/ICT 框架进行深度盘面剖析（每张图消耗 5 pts）。
+        </span>
       </div>
     </div>
   );

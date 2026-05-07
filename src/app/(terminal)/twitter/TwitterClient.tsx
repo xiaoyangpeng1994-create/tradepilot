@@ -41,7 +41,6 @@ export function TwitterClient({ signals }: { signals: Signal[] }) {
         <ChatWindow
           ref={chatRef}
           channel="twitter"
-          intro="我是彭哥 AI 信号分析助手。点上方任意一条推文的「Gemini 深剖」按钮，我会基于 SMC/ICT 框架立即拆解；也可以直接在下方提问，比如『这一单入场逻辑可靠吗？』。"
           placeholder="问问 AI：这一单入场逻辑可靠吗？"
         />
       </div>
