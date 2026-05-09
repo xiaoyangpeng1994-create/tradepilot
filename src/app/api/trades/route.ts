@@ -10,6 +10,7 @@ const createSchema = z.object({
   channel: z.string().max(32).optional().nullable(),
   direction: z.enum(["LONG", "SHORT"]),
   entryPrice: z.number().positive(),
+  exitPrice: z.number().positive().optional().nullable(),
   stopPrice: z.number().positive().optional().nullable(),
   targetPrice: z.number().positive().optional().nullable(),
   setup: z.string().max(32).optional().nullable(),
@@ -68,6 +69,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "参数校验失败" }, { status: 400 });
   }
 
+  // 当 exitPrice 同时提供时（聊天里识别到的 ROUND_TRIP），直接创建为 CLOSED
+  const isRoundTrip = parsed.data.exitPrice != null;
+  const pnlPct = isRoundTrip
+    ? Number(
+        (
+          (parsed.data.direction === "LONG"
+            ? ((parsed.data.exitPrice! - parsed.data.entryPrice) / parsed.data.entryPrice) * 100
+            : ((parsed.data.entryPrice - parsed.data.exitPrice!) / parsed.data.entryPrice) * 100)
+        ).toFixed(2),
+      )
+    : null;
+
   const created = await prisma.trade.create({
     data: {
       userId: session.user.id,
@@ -75,12 +88,15 @@ export async function POST(req: NextRequest) {
       channel: parsed.data.channel ?? null,
       direction: parsed.data.direction,
       entryPrice: parsed.data.entryPrice,
+      exitPrice: parsed.data.exitPrice ?? null,
+      pnlPct,
       stopPrice: parsed.data.stopPrice ?? null,
       targetPrice: parsed.data.targetPrice ?? null,
       setup: parsed.data.setup ?? null,
       timeframe: parsed.data.timeframe ?? null,
       notes: parsed.data.notes ?? null,
-      status: "OPEN",
+      status: isRoundTrip ? "CLOSED" : "OPEN",
+      closedAt: isRoundTrip ? new Date() : null,
     },
     select: { id: true },
   });

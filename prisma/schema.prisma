@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -13,7 +14,7 @@ model User {
   passwordHash    String
   email           String?   @unique
   phone           String?   @unique
-  computePts      Int       @default(500)
+  computePts      Int       @default(2000)
   walletBalance   Int       @default(0)        // 钱包余额（人民币 分）
   vipLevel        String    @default("FREE")    // FREE | PRO_MONTH | PRO_YEAR | PRO_PLUS_MONTH | PRO_PLUS_YEAR
   vipExpiresAt    DateTime?
@@ -62,22 +63,34 @@ model CommissionLog {
 }
 
 model ChatSession {
-  id        String   @id @default(cuid())
-  userId    String
-  channel   String   // forex | gold | crypto | us | a-shares | academy
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    String    @id @default(cuid())
+  userId                String
+  channel               String    // forex | gold | crypto | us | a-shares | academy
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // ── Context Budget Manager ──────────────────────────────────────────────
+  // summary: 会话摘要文本（≤300 tokens），由 context-budget 异步生成，注入 ULTRA 上下文
+  // summaryUpdatedAt: 最后一次摘要生成时间，用于判断是否需要重新生成
+  // messageCountAtSummary: 生成摘要时的消息总数，用于判断自上次摘要后新增了多少条
+  summary               String?
+  summaryUpdatedAt      DateTime?
+  messageCountAtSummary Int       @default(0)
+
   messages  ChatMessage[]
   user      User     @relation(fields: [userId], references: [id])
 }
 
 model ChatMessage {
-  id         String   @id @default(cuid())
-  sessionId  String
-  role       String   // user | assistant
-  content    String
-  imageData  String?  // base64 (上传 K 线图时)
-  createdAt  DateTime @default(now())
+  id            String   @id @default(cuid())
+  sessionId     String
+  role          String   // user | assistant
+  content       String
+  imageData     String?  // base64 (上传 K 线图时)
+  // 追问次数：用户在本条 assistant 回复后 5 分钟内再次发消息的累计次数。
+  // followupCount >= 2 表示 AI 回答可能没说清楚，可用于优化 Guidance snippet。
+  followupCount Int      @default(0)
+  createdAt     DateTime @default(now())
 
   session    ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }

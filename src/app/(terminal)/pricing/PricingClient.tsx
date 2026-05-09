@@ -5,11 +5,13 @@ import { useState } from "react";
 import {
   fenToYuan,
   ItemCode,
-  PTS_PER_YUAN,
-  COST_TEXT_PT,
-  COST_IMAGE_PT,
+  PRICING,
   CUSTOM_RECHARGE_MIN_YUAN,
   CUSTOM_RECHARGE_MAX_YUAN,
+  PTS_PER_YUAN,
+  getVipDisplayName,
+  isPaidLevel,
+  isUltraLevel,
 } from "@/lib/pricing";
 
 type Initial = {
@@ -22,14 +24,16 @@ type Initial = {
 
 type BuyPayload = { itemCode: string; customAmountYuan?: number };
 
+// 内测模式开关：NEXT_PUBLIC_BETA_MODE=true 时隐藏付费入口，展示"内测免费"提示
+const BETA_MODE = process.env.NEXT_PUBLIC_BETA_MODE === "true";
+
 export function PricingClient({ initial }: { initial: Initial }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"VIP" | "PTS">("VIP");
   const [buying, setBuying] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   const isVipActive =
-    initial.vipLevel !== "FREE" &&
+    isPaidLevel(initial.vipLevel) &&
     (!initial.vipExpiresAt || new Date(initial.vipExpiresAt).getTime() > Date.now());
 
   async function buy(payload: BuyPayload, label: string) {
@@ -65,38 +69,67 @@ export function PricingClient({ initial }: { initial: Initial }) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-12">
+      {/* 页头 */}
+      <div className="text-center space-y-2">
+        <h1 className="text-2xl font-semibold" style={{ color: "#f5f5f5" }}>选择你的方案</h1>
+        <p className="text-sm" style={{ color: "#a3a3a3" }}>
+          从免费开始，随时升级。所有方案均可随时取消。
+        </p>
+      </div>
+
+      {/* 账户状态 */}
       <AccountStatus initial={initial} isVipActive={isVipActive} />
 
-      <div className="terminal-card overflow-hidden">
-        <div className="grid grid-cols-2 border-b border-bg-edge">
-          <TabButton active={tab === "VIP"} onClick={() => setTab("VIP")}>
-            VIP 订阅服务
-          </TabButton>
-          <TabButton active={tab === "PTS"} onClick={() => setTab("PTS")}>
-            算力点数充值
-          </TabButton>
+      {/* 内测横幅 */}
+      {BETA_MODE && (
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+          style={{
+            background: "rgba(16,163,127,0.08)",
+            border: "1px solid rgba(16,163,127,0.25)",
+            color: "#10a37f",
+          }}
+        >
+          <span className="text-base">🎉</span>
+          <span>
+            <strong>内测期间全功能免费体验</strong>——注册即获 2,000 算力点，够用很久。
+            正式收费前会提前通知。
+          </span>
         </div>
-        <div className="p-6">
-          {tab === "VIP" ? (
-            <VipPanel buying={buying} onBuy={buy} />
-          ) : (
-            <PtsPanel buying={buying} onBuy={buy} />
-          )}
+      )}
+
+      {/* 三栏会员卡 */}
+      <section className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <FreeTierCard />
+          <MaxTierCard buying={buying} onBuy={buy} betaMode={BETA_MODE} />
+          <UltraTierCard buying={buying} onBuy={buy} betaMode={BETA_MODE} />
         </div>
-      </div>
+      </section>
 
-      <div className="text-[10px] text-ink-dim leading-relaxed">
-        当前为开发模式：点击购买后系统会立即模拟支付完成，自动结算上下游分润；正式版将接入支付网关 + 异步回调。
-      </div>
+      {/* 算力点充值 */}
+      {!BETA_MODE && <PtsSection buying={buying} onBuy={buy} />}
 
+      {/* 代理合作 */}
+      <AgentSection />
+
+      {/* 开发模式说明（仅非内测模式显示） */}
+      {!BETA_MODE && (
+        <div className="text-[11px] leading-relaxed" style={{ color: "#525252" }}>
+          当前为开发模式：点击购买后系统会立即模拟支付完成，自动结算上下游分润；正式版将接入支付网关 + 异步回调。
+        </div>
+      )}
+
+      {/* Toast */}
       {toast && (
         <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-md text-xs border ${
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-sm z-50"
+          style={
             toast.kind === "ok"
-              ? "border-accent-neon/50 bg-accent-neon/15 text-accent-neon"
-              : "border-accent-danger/50 bg-accent-danger/15 text-accent-danger"
-          }`}
+              ? { background: "rgba(16,163,127,0.15)", border: "1px solid rgba(16,163,127,0.3)", color: "#10a37f" }
+              : { background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444" }
+          }
         >
           {toast.text}
         </div>
@@ -105,294 +138,383 @@ export function PricingClient({ initial }: { initial: Initial }) {
   );
 }
 
+// ─── 账户状态 ─────────────────────────────────────────────────────────────────
+
 function AccountStatus({ initial, isVipActive }: { initial: Initial; isVipActive: boolean }) {
   if (!initial.isLoggedIn) {
     return (
-      <div className="terminal-card p-4 flex items-center justify-between">
-        <div className="text-sm text-ink-muted">购买前请先登录账号。</div>
-        <Link href="/login?callbackUrl=/pricing" className="btn-primary">
-          去登录
-        </Link>
+      <div
+        className="flex items-center justify-between p-4 rounded-xl"
+        style={{ background: "#2a2a2a", border: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <span className="text-sm" style={{ color: "#a3a3a3" }}>购买前请先登录账号。</span>
+        <Link href="/login?callbackUrl=/pricing" className="btn-primary text-sm">去登录</Link>
       </div>
     );
   }
+  const displayTier = getVipDisplayName(initial.vipLevel);
   return (
-    <div className="terminal-card p-4 flex items-center justify-between gap-4 flex-wrap">
-      <div className="flex items-center gap-6 text-xs">
-        <div>
-          <div className="label-tag">当前节点</div>
-          <div className="text-ink-bright text-sm">{initial.nickname}</div>
-        </div>
-        <div>
-          <div className="label-tag">算力余额</div>
-          <div className="text-accent-neon text-sm">
-            {initial.computePts.toLocaleString()} <span className="text-ink-dim">pts</span>
-          </div>
-        </div>
-        <div>
-          <div className="label-tag">VIP 等级</div>
-          <div className={isVipActive ? "text-accent-gold text-sm" : "text-ink-muted text-sm"}>
-            {isVipActive ? initial.vipLevel : "FREE"}
-            {isVipActive && initial.vipExpiresAt && (
-              <span className="text-[10px] text-ink-dim ml-2">
-                到期 {new Date(initial.vipExpiresAt).toLocaleDateString("zh-CN")}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`py-3 text-sm tracking-wide transition-colors ${
-        active
-          ? "text-accent-gold border-b-2 border-accent-gold bg-bg-card/40"
-          : "text-ink-muted hover:text-ink-base"
-      }`}
+    <div
+      className="flex items-center gap-6 p-4 rounded-xl flex-wrap"
+      style={{ background: "#2a2a2a", border: "1px solid rgba(255,255,255,0.06)" }}
     >
-      {children}
-    </button>
-  );
-}
-
-function VipRoiCalc() {
-  const [perDay, setPerDay] = useState(10);
-  const monthlyPts = perDay * COST_TEXT_PT * 30;
-  const equivYuan = Math.ceil(monthlyPts / PTS_PER_YUAN);
-  const vipBeats = equivYuan >= 599;
-  const perCallYuan = (COST_TEXT_PT / PTS_PER_YUAN).toFixed(2);
-
-  return (
-    <div className="terminal-card p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <span className="size-1.5 bg-accent-razer rounded-full animate-pulseLine" />
-        <span className="text-[10px] tracking-widest uppercase text-ink-base">
-          VIP 性价比测算 (ROI_CALCULATOR)
-        </span>
-      </div>
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-xs text-ink-muted">假设你每天进行</span>
-        <input
-          type="range"
-          min={1}
-          max={50}
-          value={perDay}
-          onChange={(e) => setPerDay(Number(e.target.value))}
-          className="flex-1 min-w-[140px] accent-accent-razer"
-        />
-        <span className="text-accent-razer text-base font-bold">{perDay}</span>
-        <span className="text-xs text-ink-muted">次文本对话</span>
-      </div>
-      <div className="text-xs text-ink-base leading-relaxed">
-        单次文本约 <span className="text-accent-razer font-bold">¥{perCallYuan}</span>，每月预计消耗{" "}
-        <span className="text-accent-razer font-bold">{monthlyPts.toLocaleString()} pts</span>
-        ，等价充值 <span className="text-accent-razer font-bold">¥{equivYuan}</span>
-        ；月度 VIP 仅 ¥599 含
-        <span className="text-accent-gold"> 加密推送 / 策略订阅 / 风控工具</span>{" "}
-        等独家功能。
-      </div>
-      <div
-        className={`text-xs px-3 py-2 rounded border ${
-          vipBeats
-            ? "border-accent-razer/50 bg-accent-razer/10 text-accent-razer"
-            : "border-bg-edge bg-bg-card/50 text-ink-muted"
-        }`}
-      >
-        {vipBeats
-          ? `✓ 你的使用强度下，VIP 已比充值更划算（省 ¥${equivYuan - 599} + 解锁全部特权）`
-          : `💡 当前频次充值更便宜；但若加上 K 线深度分析（${COST_IMAGE_PT} pt/次）或更密集对话，VIP 立刻回本`}
-      </div>
-    </div>
-  );
-}
-
-function VipPanel({
-  buying,
-  onBuy,
-}: {
-  buying: string | null;
-  onBuy: (payload: BuyPayload, label: string) => void;
-}) {
-  return (
-    <div className="space-y-6">
-      <div className="terminal-card p-5 border-accent-gold/40 bg-gradient-to-br from-accent-gold/5 via-bg-panel to-transparent space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="size-12 rounded-md bg-gradient-to-br from-accent-gold to-amber-700 grid place-items-center glow-edge shrink-0">
-            <CrownIcon />
-          </div>
-          <div>
-            <div className="text-accent-gold text-lg font-bold tracking-wider flex items-center gap-2">
-              VIP · 月度专业版
-              <span className="text-[10px] tracking-widest text-accent-gold px-1.5 py-0.5 rounded bg-accent-gold/15 border border-accent-gold/40">
-                FOR ACTIVE TRADERS
-              </span>
-            </div>
-            <div className="text-[10px] tracking-[0.3em] text-ink-dim uppercase">
-              INSTITUTIONAL ACCESS · ¥599/月
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-          <TierFeature label="🚀 PG-MAX 旗舰推理引擎" desc="vs 免费档 PG-CORE，更深度上下文 + 更长推理空间，回答质量翻番" />
-          <TierFeature label="📚 5 段深度报告模板" desc="每次回答按机构研报标准结构化输出，含三档情景预案" />
-          <TierFeature label="∞ 不限算力消耗" desc={`VIP 期间所有对话与图片分析全免费，告别 ${COST_TEXT_PT} pt/次`} />
-          <TierFeature label="🎯 多周期 4H + 1H 联动" desc="主结构 + 入场点同时分析，覆盖 SMC 多级共振" />
-          <TierFeature label="📊 完整交易档案保留" desc="个性化档案永久沉淀（vs 免费档 90 天清理）" />
-          <TierFeature label="🛡️ 优先客服响应" desc="VIP 专属通道，问题 24h 内响应" />
-        </div>
-      </div>
-
-      <VipRoiCalc />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-        <PriceCard
-          title="月度专业版"
-          price="¥599"
-          unit="/月"
-          desc="灵活试用，按月续费"
-          buying={buying === "PRO_MONTH"}
-          onBuy={() => onBuy({ itemCode: "PRO_MONTH" }, "月度专业版 ¥599/月")}
-        />
-        <PriceCard
-          title="年度旗舰版"
-          price="¥4,999"
-          unit="/年"
-          desc="折合 ¥416/月，省 ¥2,189"
-          highlight
-          badge="YEARLY_PRO_SAVINGS"
-          buying={buying === "PRO_YEAR"}
-          onBuy={() => onBuy({ itemCode: "PRO_YEAR" }, "年度旗舰版 ¥4,999/年")}
-        />
-      </div>
-
-      <UltraSection buying={buying} onBuy={onBuy} />
-    </div>
-  );
-}
-
-function UltraSection({
-  buying,
-  onBuy,
-}: {
-  buying: string | null;
-  onBuy: (payload: BuyPayload, label: string) => void;
-}) {
-  return (
-    <div className="terminal-card p-5 border-accent-purple/40 bg-gradient-to-br from-accent-purple/5 via-bg-panel to-accent-gold/5 space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="size-12 rounded-md bg-gradient-to-br from-accent-purple to-amber-600 grid place-items-center razer-glow">
-          <span className="text-base font-black text-bg-base">⚡</span>
-        </div>
-        <div>
-          <div className="text-accent-gold text-lg font-bold tracking-wider flex items-center gap-2">
-            ULTRA · 旗舰旗舰版 <span className="text-[10px] tracking-widest text-accent-purple px-1.5 py-0.5 rounded bg-accent-purple/15 border border-accent-purple/40">FOR PROS</span>
-          </div>
-          <div className="text-[10px] tracking-[0.3em] text-ink-dim uppercase">
-            FOR HEAVY TRADERS · ¥1,999/月
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-        <TierFeature label="📊 月度交易复盘 PDF" desc="2000+ 字 AI 自动研报，分析当月所有交易 + 进步退步对照" />
-        <TierFeature label="🔔 持仓守护实时推送" desc="后台扫描 K 线，关键位触发主动微信推送（即将上线）" />
-        <TierFeature label="👑 ULTRA 专属社群" desc="私域微信群 + 每周分享会，与彭哥团队 1v1 答疑" />
-        <TierFeature label="🧠 多周期联动" desc="4H + 1H + 15m 三周期同时分析，覆盖入场-管理-出场全程" />
-        <TierFeature label="📡 链上 / 大单数据" desc="接入 Whale Alert / 大资金流监测（即将上线）" />
-        <TierFeature label="⚡ PG-ULTRA 引擎角标" desc="AI 回复带专属 ⚡ ULTRA 标识，对话深度上限提升 50%" />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-        <PriceCard
-          title="ULTRA 月度版"
-          price="¥1,999"
-          unit="/月"
-          desc="按月开通，随时取消"
-          ultra
-          buying={buying === "PRO_PLUS_MONTH"}
-          onBuy={() => onBuy({ itemCode: "PRO_PLUS_MONTH" }, "ULTRA 月度版 ¥1,999/月")}
-        />
-        <PriceCard
-          title="ULTRA 年度版"
-          price="¥17,999"
-          unit="/年"
-          desc="折合 ¥1,499/月，省 ¥6,000"
-          ultra
-          highlight
-          badge="ULTRA_BEST_VALUE"
-          buying={buying === "PRO_PLUS_YEAR"}
-          onBuy={() => onBuy({ itemCode: "PRO_PLUS_YEAR" }, "ULTRA 年度版 ¥17,999/年")}
-        />
-      </div>
-
-      <div className="text-[10px] text-ink-dim leading-relaxed">
-        ⚠️ ULTRA 是为日均 30+ 笔分析、严肃职业交易者准备的旗舰档；普通用户 VIP 即足够。功能将在购买后陆续上线，所有 ULTRA 用户终身锁定首发权益。
-      </div>
-    </div>
-  );
-}
-
-function TierFeature({ label, desc }: { label: string; desc: string }) {
-  return (
-    <div className="border border-bg-edge bg-bg-card/40 rounded-md p-2.5">
-      <div className="text-ink-bright font-bold text-[12px] mb-1">{label}</div>
-      <div className="text-ink-muted text-[11px] leading-relaxed">{desc}</div>
-    </div>
-  );
-}
-
-function PtsPanel({
-  buying,
-  onBuy,
-}: {
-  buying: string | null;
-  onBuy: (payload: BuyPayload, label: string) => void;
-}) {
-  const fixedYuan = [50, 100, 300, 500, 1000];
-
-  return (
-    <div className="space-y-5">
       <div>
-        <div className="text-ink-bright text-base font-bold tracking-wide">算力点数（pts）</div>
-        <div className="text-xs text-ink-muted mt-1">
-          ¥1 = {PTS_PER_YUAN} pts；1 次文本对话消耗 {COST_TEXT_PT} pt（约 ¥
-          {(COST_TEXT_PT / PTS_PER_YUAN).toFixed(2)}/次），上传 K 线图深度推理消耗 {COST_IMAGE_PT} pts（约 ¥
-          {(COST_IMAGE_PT / PTS_PER_YUAN).toFixed(2)}/次）。VIP 用户不消耗算力。
+        <div className="text-[10px] tracking-wide uppercase mb-0.5" style={{ color: "#737373" }}>账号</div>
+        <div className="text-sm" style={{ color: "#f5f5f5" }}>{initial.nickname}</div>
+      </div>
+      <div>
+        <div className="text-[10px] tracking-wide uppercase mb-0.5" style={{ color: "#737373" }}>算力余额</div>
+        <div className="text-sm font-medium" style={{ color: "#10a37f" }}>
+          {initial.computePts.toLocaleString()} <span style={{ color: "#737373" }}>pts</span>
+        </div>
+      </div>
+      <div>
+        <div className="text-[10px] tracking-wide uppercase mb-0.5" style={{ color: "#737373" }}>当前方案</div>
+        <div
+          className="text-sm font-medium"
+          style={{ color: isVipActive ? "#f7931a" : "#a3a3a3" }}
+        >
+          {displayTier}
+          {isVipActive && initial.vipExpiresAt && (
+            <span className="text-[11px] ml-2 font-normal" style={{ color: "#737373" }}>
+              到期 {new Date(initial.vipExpiresAt).toLocaleDateString("zh-CN")}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FREE 卡 ──────────────────────────────────────────────────────────────────
+
+function FreeTierCard() {
+  return (
+    <div
+      className="p-6 rounded-2xl flex flex-col gap-5"
+      style={{ background: "#212121", border: "1px solid rgba(255,255,255,0.06)" }}
+    >
+      <div>
+        <div className="text-[11px] tracking-wide uppercase mb-1.5" style={{ color: "#737373" }}>FREE</div>
+        <div className="text-base font-semibold mb-1" style={{ color: "#f5f5f5" }}>先看懂当前市场位置</div>
+        <div className="flex items-baseline gap-1">
+          <span className="text-2xl font-bold" style={{ color: "#a3a3a3" }}>¥0</span>
+          <span className="text-xs" style={{ color: "#737373" }}>/永久</span>
+        </div>
+      </div>
+      <ul className="space-y-2.5 flex-1">
+        {[
+          "每天基础问答（3次）",
+          "1–2 个关键位置",
+          "基础支撑 / 压力",
+          "小白短答",
+          "新人礼 500 点",
+        ].map((f) => <FeatureRow key={f} text={f} />)}
+      </ul>
+      <Link
+        href="/login"
+        className="w-full text-center py-2.5 rounded-xl text-sm transition-colors duration-150"
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          color: "#a3a3a3",
+        }}
+      >
+        免费开始体验
+      </Link>
+    </div>
+  );
+}
+
+// ─── TP-MAX 卡 ────────────────────────────────────────────────────────────────
+
+function MaxTierCard({
+  buying,
+  onBuy,
+  betaMode = false,
+}: {
+  buying: string | null;
+  onBuy: (payload: BuyPayload, label: string) => void;
+  betaMode?: boolean;
+}) {
+  const [cycle, setCycle] = useState<"month" | "year">("month");
+  const isMonthBuying = buying === "TP_MAX_MONTH";
+  const isYearBuying = buying === "TP_MAX_YEAR";
+  const isBuying = isMonthBuying || isYearBuying;
+
+  return (
+    <div
+      className="p-6 rounded-2xl flex flex-col gap-5 relative"
+      style={{
+        background: "#212121",
+        border: "1px solid rgba(247,147,26,0.35)",
+      }}
+    >
+      {/* 推荐标记 */}
+      <span
+        className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] tracking-wide px-3 py-0.5 rounded-full whitespace-nowrap"
+        style={{
+          background: "rgba(247,147,26,0.15)",
+          border: "1px solid rgba(247,147,26,0.4)",
+          color: "#f7931a",
+        }}
+      >
+        ★ 推荐
+      </span>
+
+      <div>
+        <div className="text-[11px] tracking-wide uppercase mb-1.5" style={{ color: "#f7931a" }}>TP-MAX</div>
+        <div className="text-base font-semibold mb-1" style={{ color: "#f5f5f5" }}>看懂关键点位和持仓风险</div>
+        <div className="mb-2">
+          {cycle === "month" ? (
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold" style={{ color: "#f7931a" }}>¥199</span>
+              <span className="text-xs" style={{ color: "#737373" }}>/月</span>
+              <span className="text-[11px] line-through" style={{ color: "#525252" }}>¥299</span>
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded"
+                style={{ background: "rgba(247,147,26,0.1)", color: "#f7931a" }}
+              >内测价</span>
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold" style={{ color: "#f7931a" }}>¥2,999</span>
+              <span className="text-xs" style={{ color: "#737373" }}>/年</span>
+              <span className="text-[11px]" style={{ color: "#10a37f" }}>折合 ¥250/月</span>
+            </div>
+          )}
+        </div>
+        {/* 周期切换 */}
+        <div className="flex gap-1">
+          {(["month", "year"] as const).map((c) => (
+            <button
+              key={c}
+              onClick={() => setCycle(c)}
+              className="text-[11px] px-2.5 py-0.5 rounded-lg transition-colors duration-150"
+              style={
+                cycle === c
+                  ? { background: "rgba(247,147,26,0.15)", border: "1px solid rgba(247,147,26,0.4)", color: "#f7931a" }
+                  : { background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: "#737373" }
+              }
+            >
+              {c === "month" ? "月付" : "年付"}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        {fixedYuan.map((yuan) => {
-          const code = `PTS_${yuan}` as ItemCode;
-          const pts = yuan * PTS_PER_YUAN;
-          const isBuying = buying === code;
+      <ul className="space-y-2.5 flex-1">
+        {[
+          "今日交易观察计划",
+          "图片 K 线分析",
+          "关键支撑 / 压力",
+          "持仓风险判断",
+          "交易画像",
+          "最近 5 笔复盘",
+          "每月赠送 30,000 点",
+        ].map((f) => <FeatureRow key={f} text={f} gold />)}
+      </ul>
+
+      {betaMode ? (
+        <div
+          className="w-full py-2.5 rounded-xl text-sm text-center"
+          style={{
+            background: "rgba(247,147,26,0.08)",
+            border: "1px solid rgba(247,147,26,0.2)",
+            color: "#f7931a",
+          }}
+        >
+          内测期间免费体验 ✓
+        </div>
+      ) : (
+        <button
+          disabled={isBuying}
+          onClick={() =>
+            cycle === "month"
+              ? onBuy({ itemCode: "TP_MAX_MONTH" }, "TP-MAX 月付 ¥199/月")
+              : onBuy({ itemCode: "TP_MAX_YEAR" }, "TP-MAX 年付 ¥2,999/年")
+          }
+          className="w-full py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 disabled:opacity-50"
+          style={{ background: "#f7931a", color: "#fff" }}
+        >
+          {isBuying ? "处理中..." : "开启 TP-MAX"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── TP-ULTRA 卡 ──────────────────────────────────────────────────────────────
+
+function UltraTierCard({
+  buying,
+  onBuy,
+  betaMode = false,
+}: {
+  buying: string | null;
+  onBuy: (payload: BuyPayload, label: string) => void;
+  betaMode?: boolean;
+}) {
+  const [cycle, setCycle] = useState<"month" | "year">("month");
+  const isMonthBuying = buying === "TP_ULTRA_MONTH";
+  const isYearBuying = buying === "TP_ULTRA_YEAR";
+  const isBuying = isMonthBuying || isYearBuying;
+
+  return (
+    <div
+      className="p-6 rounded-2xl flex flex-col gap-5"
+      style={{
+        background: "#212121",
+        border: "1px solid rgba(168,85,247,0.25)",
+      }}
+    >
+      <div>
+        <div className="text-[11px] tracking-wide uppercase mb-1.5" style={{ color: "#a855f7" }}>TP-ULTRA</div>
+        <div className="text-base font-semibold mb-1" style={{ color: "#f5f5f5" }}>让 AI 成为你的长期交易陪练</div>
+        <div className="mb-2">
+          {cycle === "month" ? (
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold" style={{ color: "#a855f7" }}>¥599</span>
+              <span className="text-xs" style={{ color: "#737373" }}>/月</span>
+              <span className="text-[11px] line-through" style={{ color: "#525252" }}>¥999</span>
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded"
+                style={{ background: "rgba(168,85,247,0.1)", color: "#a855f7" }}
+              >内测价</span>
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold" style={{ color: "#a855f7" }}>¥9,999</span>
+              <span className="text-xs" style={{ color: "#737373" }}>/年</span>
+              <span className="text-[11px]" style={{ color: "#10a37f" }}>折合 ¥833/月</span>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-1">
+          {(["month", "year"] as const).map((c) => (
+            <button
+              key={c}
+              onClick={() => setCycle(c)}
+              className="text-[11px] px-2.5 py-0.5 rounded-lg transition-colors duration-150"
+              style={
+                cycle === c
+                  ? { background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.4)", color: "#a855f7" }
+                  : { background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: "#737373" }
+              }
+            >
+              {c === "month" ? "月付" : "年付"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ul className="space-y-2.5 flex-1">
+        {[
+          "高阶模型",
+          "多周期点位地图",
+          "更长上下文",
+          "会话摘要",
+          "深度复盘",
+          "高级交易画像",
+          "持仓风险拆解",
+          "每月赠送 120,000 点",
+        ].map((f) => <FeatureRow key={f} text={f} purple />)}
+      </ul>
+
+      {betaMode ? (
+        <div
+          className="w-full py-2.5 rounded-xl text-sm text-center"
+          style={{
+            background: "rgba(168,85,247,0.08)",
+            border: "1px solid rgba(168,85,247,0.2)",
+            color: "#a855f7",
+          }}
+        >
+          内测期间免费体验 ✓
+        </div>
+      ) : (
+        <button
+          disabled={isBuying}
+          onClick={() =>
+            cycle === "month"
+              ? onBuy({ itemCode: "TP_ULTRA_MONTH" }, "TP-ULTRA 月付 ¥599/月")
+              : onBuy({ itemCode: "TP_ULTRA_YEAR" }, "TP-ULTRA 年付 ¥9,999/年")
+          }
+          className="w-full py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 disabled:opacity-50"
+          style={{ background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.4)", color: "#a855f7" }}
+        >
+          {isBuying ? "处理中..." : "开启 TP-ULTRA"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── 算力点充值包 ─────────────────────────────────────────────────────────────
+
+const PTS_PACKS: {
+  code: ItemCode;
+  yuan: number;
+  base: number;
+  bonus: number;
+  total: number;
+}[] = [
+  { code: "PTS_29", yuan: 29, base: 2900, bonus: 100, total: 3000 },
+  { code: "PTS_99", yuan: 99, base: 10000, bonus: 2000, total: 12000 },
+  { code: "PTS_199", yuan: 199, base: 20000, bonus: 8000, total: 28000 },
+  { code: "PTS_499", yuan: 499, base: 50000, bonus: 30000, total: 80000 },
+];
+
+function PtsSection({
+  buying,
+  onBuy,
+}: {
+  buying: string | null;
+  onBuy: (payload: BuyPayload, label: string) => void;
+}) {
+  return (
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-base font-semibold mb-1" style={{ color: "#f5f5f5" }}>算力点充值</h2>
+        <p className="text-sm" style={{ color: "#a3a3a3" }}>
+          算力点是 AI 调用燃料。VIP 每月赠送，也可单独充值。
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {PTS_PACKS.map((pack) => {
+          const isBuying = buying === pack.code;
+          const isHighlight = pack.yuan === 99;
           return (
             <div
-              key={code}
-              className="terminal-card p-4 flex flex-col gap-2 hover:border-accent-info/40 transition-colors"
+              key={pack.code}
+              className="p-4 rounded-xl flex flex-col gap-3 transition-colors duration-150"
+              style={{
+                background: "#212121",
+                border: isHighlight ? "1px solid rgba(16,163,127,0.3)" : "1px solid rgba(255,255,255,0.06)",
+              }}
             >
-              <div className="text-ink-bright text-2xl font-bold">¥{yuan}</div>
-              <div className="text-[11px] text-accent-neon">
-                {pts.toLocaleString()} pts
+              <div>
+                <div className="text-xl font-bold" style={{ color: "#f5f5f5" }}>¥{pack.yuan}</div>
+                {pack.bonus > 0 ? (
+                  <div className="mt-1 space-y-0.5">
+                    <div className="text-xs" style={{ color: "#a3a3a3" }}>{pack.base.toLocaleString()} 点</div>
+                    <div className="text-[11px] font-medium" style={{ color: "#10a37f" }}>+ 赠 {pack.bonus.toLocaleString()} 点</div>
+                    <div className="text-[10px]" style={{ color: "#737373" }}>共 {pack.total.toLocaleString()} 点</div>
+                  </div>
+                ) : (
+                  <div className="mt-1 text-xs" style={{ color: "#a3a3a3" }}>{pack.total.toLocaleString()} 点</div>
+                )}
               </div>
               <button
                 disabled={isBuying}
-                onClick={() => onBuy({ itemCode: code }, `¥${yuan} → ${pts.toLocaleString()} pts`)}
-                className="btn-primary mt-auto disabled:opacity-50 text-xs"
+                onClick={() => onBuy({ itemCode: pack.code }, `¥${pack.yuan} → ${pack.total.toLocaleString()} pts`)}
+                className="mt-auto py-2 rounded-lg text-xs font-medium transition-colors duration-150 disabled:opacity-50"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  color: "#d4d4d4",
+                }}
               >
                 {isBuying ? "处理中..." : "立即充值"}
               </button>
@@ -401,8 +523,32 @@ function PtsPanel({
         })}
       </div>
 
+      {/* 消耗参考 */}
+      <div
+        className="p-4 rounded-xl space-y-3"
+        style={{ background: "#212121", border: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <div className="text-[11px] tracking-wide uppercase" style={{ color: "#737373" }}>算力点消耗参考</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
+          {[
+            ["基础短答", "20 点"],
+            ["标准点位分析", "60 点"],
+            ["持仓风险判断", "100 点"],
+            ["图片 K 线分析", "300 点"],
+            ["今日交易观察计划", "300–500 点"],
+            ["最近 5 笔复盘", "500 点"],
+          ].map(([label, cost]) => (
+            <div key={label} className="flex justify-between gap-2">
+              <span style={{ color: "#a3a3a3" }}>{label}</span>
+              <span className="font-mono" style={{ color: "#f5f5f5" }}>{cost}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 自定义充值 */}
       <CustomRecharge buying={buying} onBuy={onBuy} />
-    </div>
+    </section>
   );
 }
 
@@ -423,18 +569,19 @@ function CustomRecharge({
   const isBuying = buying?.startsWith("CUSTOM:") ?? false;
 
   return (
-    <div className="terminal-card p-4 border-accent-info/20">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="size-1.5 bg-accent-info rounded-full animate-pulseLine" />
-        <span className="text-[10px] tracking-widest uppercase text-ink-base">
-          自定义金额 (CUSTOM_RECHARGE)
-        </span>
-      </div>
+    <div
+      className="p-4 rounded-xl"
+      style={{ background: "#212121", border: "1px solid rgba(255,255,255,0.06)" }}
+    >
+      <div className="text-sm font-medium mb-3" style={{ color: "#f5f5f5" }}>自定义金额充值</div>
       <div className="flex items-end gap-3 flex-wrap">
-        <div className="flex-1 min-w-[180px]">
-          <div className="label-tag mb-1">充值金额（元）</div>
-          <div className="flex items-center bg-bg-card border border-bg-edge rounded-md px-3 py-2 focus-within:border-accent-info/60">
-            <span className="text-ink-dim text-sm mr-2">¥</span>
+        <div className="flex-1 min-w-[160px]">
+          <div className="text-[10px] tracking-wide uppercase mb-1" style={{ color: "#737373" }}>充值金额（元）</div>
+          <div
+            className="flex items-center px-3 py-2 rounded-lg"
+            style={{ background: "#2a2a2a", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <span className="text-sm mr-2" style={{ color: "#737373" }}>¥</span>
             <input
               type="number"
               inputMode="numeric"
@@ -444,149 +591,114 @@ function CustomRecharge({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder={`${CUSTOM_RECHARGE_MIN_YUAN}-${CUSTOM_RECHARGE_MAX_YUAN}`}
-              className="flex-1 bg-transparent outline-none text-ink-bright text-sm"
+              className="flex-1 bg-transparent outline-none text-sm"
+              style={{ color: "#f5f5f5" }}
             />
           </div>
         </div>
-        <div className="min-w-[140px]">
-          <div className="label-tag mb-1">将获得</div>
-          <div className="text-accent-neon text-lg font-bold">
+        <div className="min-w-[120px]">
+          <div className="text-[10px] tracking-wide uppercase mb-1" style={{ color: "#737373" }}>将获得</div>
+          <div className="text-lg font-bold" style={{ color: "#10a37f" }}>
             {valid ? pts.toLocaleString() : "—"}{" "}
-            <span className="text-[10px] text-ink-dim font-normal">pts</span>
+            <span className="text-[11px] font-normal" style={{ color: "#737373" }}>pts</span>
           </div>
         </div>
         <button
           disabled={!valid || isBuying}
-          onClick={() =>
-            onBuy(
-              { itemCode: "PTS_CUSTOM", customAmountYuan: yuan },
-              `自定义充值 ¥${yuan} → ${pts.toLocaleString()} pts`,
-            )
-          }
-          className="btn-primary text-xs disabled:opacity-50"
+          onClick={() => onBuy({ itemCode: "PTS_CUSTOM", customAmountYuan: yuan }, `自定义充值 ¥${yuan} → ${pts.toLocaleString()} pts`)}
+          className="py-2 px-4 rounded-lg text-sm font-medium transition-colors duration-150 disabled:opacity-40"
+          style={{ background: "#10a37f", color: "#fff" }}
         >
           {isBuying ? "处理中..." : "立即充值"}
         </button>
       </div>
-      <div className="text-[10px] text-ink-dim mt-2">
-        支持 ¥{CUSTOM_RECHARGE_MIN_YUAN}-¥{CUSTOM_RECHARGE_MAX_YUAN} 整数金额；当前汇率 ¥1 = {PTS_PER_YUAN} pts。
+      <div className="text-[11px] mt-2" style={{ color: "#525252" }}>
+        支持 ¥{CUSTOM_RECHARGE_MIN_YUAN}–¥{CUSTOM_RECHARGE_MAX_YUAN} 整数金额；基础汇率 ¥1 = {PTS_PER_YUAN} pts
       </div>
     </div>
   );
 }
 
-function Feature(_props: { title: string; desc: string; iconBg: string; icon: React.ReactNode }) {
-  // 留壳 — 之前 4 色彩虹图标 Feature 已被 TierFeature 取代，此处仅占位防止外部引用碎裂
-  void _props;
-  return null;
-}
+// ─── 代理合作 ─────────────────────────────────────────────────────────────────
 
-function PriceCard({
-  title,
-  price,
-  unit,
-  desc,
-  highlight,
-  badge,
-  buying,
-  onBuy,
-  ultra,
-}: {
-  title: string;
-  price: string;
-  unit: string;
-  desc: string;
-  highlight?: boolean;
-  badge?: string;
-  buying: boolean;
-  onBuy: () => void;
-  ultra?: boolean;
-}) {
-  // ULTRA 档配色用紫色，普通 highlight 用金色（必须用字面量 class，Tailwind JIT 不识别动态拼接）
+function AgentSection() {
+  const [open, setOpen] = useState(false);
   return (
     <div
-      className={`terminal-card p-6 relative ${
-        highlight && ultra
-          ? "border-accent-purple/60 glow-edge bg-accent-purple/5"
-          : highlight
-            ? "border-accent-gold/60 glow-edge"
-            : ultra
-              ? "bg-accent-purple/5"
-              : ""
-      }`}
+      className="rounded-xl overflow-hidden"
+      style={{ background: "#212121", border: "1px solid rgba(255,255,255,0.06)" }}
     >
-      {badge && (
-        <span
-          className={`absolute -top-2.5 left-1/2 -translate-x-1/2 text-[9px] tracking-widest border rounded-full px-2 py-0.5 ${
-            ultra
-              ? "bg-accent-purple/20 text-accent-purple border-accent-purple/60"
-              : "bg-accent-gold/20 text-accent-gold border-accent-gold/60"
-          }`}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-3.5 text-sm transition-colors duration-150"
+        style={{ color: "#a3a3a3" }}
+      >
+        <span>代理合作 · 分成说明</span>
+        <svg
+          viewBox="0 0 16 16"
+          className={`size-4 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          style={{ color: "#737373" }}
         >
-          {badge}
-        </span>
+          <path d="M4 6l4 4 4-4" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-5 pb-5 space-y-4 text-xs" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="pt-4" style={{ color: "#a3a3a3" }}>
+            邀请用户注册并购买后，系统自动结算分润至你的钱包余额。
+          </div>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <div className="text-[10px] tracking-wide uppercase" style={{ color: "#f7931a" }}>会员订阅分成</div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between">
+                  <span style={{ color: "#a3a3a3" }}>一级代理（直推）</span>
+                  <span className="font-bold" style={{ color: "#f7931a" }}>20%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: "#a3a3a3" }}>二级代理</span>
+                  <span className="font-bold" style={{ color: "#f7931a" }}>10%</span>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-[10px] tracking-wide uppercase" style={{ color: "#10a37f" }}>算力点充值分成</div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between">
+                  <span style={{ color: "#a3a3a3" }}>一级代理（直推）</span>
+                  <span className="font-bold" style={{ color: "#10a37f" }}>10%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: "#a3a3a3" }}>二级代理</span>
+                  <span className="font-bold" style={{ color: "#10a37f" }}>5%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style={{ color: "#525252" }}>
+            算力点直接对应模型成本，分成比例低于会员订阅。分润实时到账，可在个人中心查看明细。
+          </div>
+        </div>
       )}
-      <div className="text-center space-y-3">
-        <div
-          className={`text-sm tracking-widest ${
-            highlight && ultra
-              ? "text-accent-purple"
-              : highlight
-                ? "text-accent-gold"
-                : ultra
-                  ? "text-accent-purple"
-                  : "text-ink-muted"
-          }`}
-        >
-          {title}
-        </div>
-        <div className="flex items-baseline justify-center gap-1">
-          <span
-            className={`text-4xl font-bold ${
-              highlight && ultra
-                ? "text-accent-purple"
-                : highlight
-                  ? "text-accent-gold"
-                  : ultra
-                    ? "text-accent-purple"
-                    : "text-ink-bright"
-            }`}
-          >
-            {price}
-          </span>
-          <span className="text-ink-dim text-sm">{unit}</span>
-        </div>
-        <div className="text-[11px] text-ink-muted">{desc}</div>
-        <button
-          disabled={buying}
-          onClick={onBuy}
-          className={`w-full disabled:opacity-50 ${
-            ultra ? "btn-primary" : highlight ? "btn-gold" : "btn-primary"
-          }`}
-        >
-          {buying ? "处理中..." : "立即开通"}
-        </button>
-      </div>
     </div>
   );
 }
 
-function CrownIcon() {
+// ─── 通用组件 ─────────────────────────────────────────────────────────────────
+
+function FeatureRow({ text, gold, purple }: { text: string; gold?: boolean; purple?: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" className="size-7 text-bg-base" fill="currentColor">
-      <path d="M3 8l4 5 5-7 5 7 4-5-2 11H5L3 8z" />
-    </svg>
+    <li className="flex items-start gap-2 text-xs">
+      <span
+        className="mt-0.5 shrink-0"
+        style={{ color: gold ? "#f7931a" : purple ? "#a855f7" : "#737373" }}
+      >
+        ✓
+      </span>
+      <span style={{ color: gold || purple ? "#d4d4d4" : "#a3a3a3" }}>{text}</span>
+    </li>
   );
-}
-function BoltIcon() {
-  return null;
-}
-function RadarIcon() {
-  return null;
-}
-function ShieldIcon() {
-  return null;
-}
-function TargetIcon() {
-  return null;
 }

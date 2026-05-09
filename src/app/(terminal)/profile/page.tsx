@@ -12,8 +12,10 @@ export default async function ProfilePage() {
     redirect("/login?callbackUrl=/profile");
   }
 
+  const userId = session.user.id;
+
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: {
       id: true,
       nickname: true,
@@ -32,14 +34,22 @@ export default async function ProfilePage() {
 
   if (!user) redirect("/login?callbackUrl=/profile");
 
-  let parentNickname: string | null = null;
-  if (user.parentAgentId) {
-    const p = await prisma.user.findUnique({
-      where: { id: user.parentAgentId },
-      select: { nickname: true },
-    });
-    parentNickname = p?.nickname ?? null;
-  }
+  // 并行查询：上级昵称 + 邀请人数 + 累计邀请获得的算力点（通过 inviterBonusLog 或直接统计直推用户数）
+  const [parentUser, invitedCount] = await Promise.all([
+    user.parentAgentId
+      ? prisma.user.findUnique({
+          where: { id: user.parentAgentId },
+          select: { nickname: true },
+        })
+      : Promise.resolve(null),
+    // 直接统计以当前用户为 parentAgentId 的用户数量（即邀请成功人数）
+    prisma.user.count({ where: { parentAgentId: userId } }),
+  ]);
+
+  const parentNickname = parentUser?.nickname ?? null;
+  // 累计邀请奖励算力点 = 邀请人数 × 500（INVITER_BONUS_PTS）
+  // 注意：这里只是展示估算值，实际以 computePts 余额为准
+  const invitedEarnedPts = invitedCount * 500;
 
   return (
     <>
@@ -59,6 +69,10 @@ export default async function ProfilePage() {
             parentNickname,
             tradingStyle: (user.tradingStyle as "INTRADAY" | "SWING" | "POSITION" | "LEARNING") ?? "LEARNING",
             createdAt: user.createdAt.toISOString(),
+          }}
+          inviteStats={{
+            invitedCount,
+            invitedEarnedPts,
           }}
         />
       </div>

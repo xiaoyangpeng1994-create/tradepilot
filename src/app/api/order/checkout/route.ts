@@ -7,6 +7,8 @@ import {
   PTS_PER_YUAN,
   CUSTOM_RECHARGE_MIN_YUAN,
   CUSTOM_RECHARGE_MAX_YUAN,
+  isUltraLevel,
+  INVITER_FIRST_PAY_BONUS_PTS,
 } from "@/lib/pricing";
 import { settleCommission } from "@/lib/commission";
 
@@ -19,13 +21,23 @@ type ResolvedItem = {
   kind: "SUBSCRIBE" | "RECHARGE";
   itemCode: string;
   amountCny: number;
-  pts?: number;
+  pts?: number;        // 充值获得的算力点（RECHARGE 用）
+  giftPts?: number;    // VIP 开通时赠送的算力点（SUBSCRIBE 用）
   vipDays?: number;
+  vipTier?: "TP_MAX" | "TP_ULTRA"; // 用于判断档位
 };
 
 // 开发模式下单 + 立即模拟支付。
 // 真实支付链路上线后：拆成 /api/order/create 创建 PENDING + 支付网关 webhook 标记 PAID 并触发 settle。
 export async function POST(req: NextRequest) {
+  // Beta 模式：内测期间拒绝所有购买请求，防止模拟支付被滥用
+  if (process.env.NEXT_PUBLIC_BETA_MODE === "true") {
+    return NextResponse.json(
+      { error: "内测期间暂未开放付费，请等待正式上线通知" },
+      { status: 403 },
+    );
+  }
+
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
@@ -37,7 +49,7 @@ export async function POST(req: NextRequest) {
     | null;
   const code = body?.itemCode;
 
-  // 解析商品：固定档位 or 自定义
+  // 解析商品：固定档位 or 自定义充值
   let item: ResolvedItem;
   if (code === "PTS_CUSTOM") {
     const yuan = Number(body?.customAmountYuan);
@@ -67,7 +79,9 @@ export async function POST(req: NextRequest) {
       itemCode: fixed.code,
       amountCny: fixed.amountCny,
       pts: fixed.meta?.pts,
+      giftPts: fixed.meta?.giftPts,
       vipDays: fixed.meta?.vipDays,
+      vipTier: fixed.meta?.vipTier,
     };
   } else {
     return NextResponse.json({ error: "商品代码无效" }, { status: 400 });
@@ -105,6 +119,7 @@ export async function POST(req: NextRequest) {
     // 2) 账户变更 + 标记 PAID 同事务
     await prisma.$transaction(async (tx) => {
       if (item.kind === "RECHARGE" && item.pts) {
+        // 算力点充值：直接增加算力点
         await tx.user.update({
           where: { id: userId },
           data: { computePts: { increment: item.pts } },
@@ -119,21 +134,28 @@ export async function POST(req: NextRequest) {
             ? user.vipExpiresAt
             : now;
         const newExpiry = new Date(base.getTime() + item.vipDays * 86400_000);
-        // 防降级：当前 ULTRA 在期 + 买的是普通 VIP，保留 ULTRA 等级（仍延期），
-        // 否则用新购档位
+
+        // 防降级逻辑：
+        // - 当前 ULTRA 在期 + 购买的是 TP-MAX 或 7天体验卡 → 保留 ULTRA 等级（仍延期）
+        // - 其他情况用新购档位
         const currentIsUltra =
           !!user &&
-          (user.vipLevel === "PRO_PLUS_MONTH" || user.vipLevel === "PRO_PLUS_YEAR") &&
+          isUltraLevel(user.vipLevel) &&
           !!user.vipExpiresAt &&
           user.vipExpiresAt.getTime() > now.getTime();
-        const incomingIsUltra =
-          item.itemCode === "PRO_PLUS_MONTH" || item.itemCode === "PRO_PLUS_YEAR";
-        const nextLevel = currentIsUltra && !incomingIsUltra ? user!.vipLevel : item.itemCode;
+        const incomingIsUltra = item.vipTier === "TP_ULTRA";
+        const nextLevel =
+          currentIsUltra && !incomingIsUltra ? user!.vipLevel : item.itemCode;
+
+        // VIP 开通同时赠送算力点
+        const giftPts = item.giftPts ?? 0;
+
         await tx.user.update({
           where: { id: userId },
           data: {
             vipLevel: nextLevel,
             vipExpiresAt: newExpiry,
+            ...(giftPts > 0 ? { computePts: { increment: giftPts } } : {}),
           },
         });
       }
@@ -143,11 +165,40 @@ export async function POST(req: NextRequest) {
         data: { status: "PAID", paidAt: now },
       });
     });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "支付失败，订单挂起" }, { status: 500 });
   }
 
   await settleCommission(order.id);
+
+  // ── 首次付费邀请人奖励 ──────────────────────────────────────────────────────
+  // 如果买家有邀请人（parentAgentId），且这是买家的第一笔付费订单，
+  // 则给邀请人额外奖励 INVITER_FIRST_PAY_BONUS_PTS 算力点。
+  try {
+    const buyer = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { parentAgentId: true },
+    });
+    if (buyer?.parentAgentId) {
+      // 统计买家历史付费订单数（不含本次，本次已 PAID）
+      const prevPaidCount = await prisma.order.count({
+        where: {
+          userId,
+          status: "PAID",
+          id: { not: order.id }, // 排除本次
+        },
+      });
+      // 首次付费（之前没有其他 PAID 订单）
+      if (prevPaidCount === 0) {
+        await prisma.user.update({
+          where: { id: buyer.parentAgentId },
+          data: { computePts: { increment: INVITER_FIRST_PAY_BONUS_PTS } },
+        });
+      }
+    }
+  } catch {
+    // 奖励失败不影响主流程，静默处理
+  }
 
   return NextResponse.json({ ok: true, orderId: order.id });
 }

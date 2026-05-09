@@ -127,7 +127,7 @@ function RegisterForm() {
         setLoading(false);
         return;
       }
-      router.push("/forex");
+      router.push("/");
       router.refresh();
     } catch {
       setError("网络异常，请稍后重试");

@@ -54,7 +54,7 @@ export default function AcademyPage() {
     <>
       <PageHeader
         title="裸 K 实战学院"
-        badge="PENG GE TRADING ACADEMY · FROM ZERO TO HERO"
+        badge="TRADEPILOT ACADEMY"
       />
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
         <AiTutorBanner />
@@ -73,10 +73,10 @@ export default function AcademyPage() {
           channel="academy"
           placeholder="问问 AI 助教：这个课程的逻辑是什么？"
           suggestions={[
-            "PINBAR 见顶/见底的关键确认条件是什么？",
-            "怎么分辨「真」订单块和「假」订单块？",
-            "FVG 缺口回补概率有没有量化标准？",
-            "扫损后真破位 vs 假突破怎么区分？",
+            { icon: "📚", tag: "SMC", label: "PINBAR 确认条件", question: "PINBAR 见顶/见底的关键确认条件是什么？", tagColor: "blue" },
+            { icon: "🔍", tag: "订单块", label: "真假订单块辨别", question: "怎么分辨「真」订单块和「假」订单块？", tagColor: "blue" },
+            { icon: "📊", tag: "FVG", label: "缺口回补概率", question: "FVG 缺口回补概率有没有量化标准？", tagColor: "green" },
+            { icon: "⚡", tag: "突破", label: "真破位 vs 假突破", question: "扫损后真破位 vs 假突破怎么区分？", tagColor: "gray" },
           ]}
         />
       </div>
@@ -94,7 +94,7 @@ function AiTutorBanner() {
       </div>
       <div className="flex-1">
         <div className="text-accent-gold text-sm font-bold tracking-wide">
-          AI 助教已接入 (Google Gemini)
+          AI 助教已就位
         </div>
         <div className="text-[11px] text-ink-muted leading-relaxed mt-1">
           在学习过程中有任何疑问？随时在下方对话框开启聊天！无论你想问什么，我都会基于实时行情和深度逻辑为你解答。点击左下方"相机"可上传盘面图。

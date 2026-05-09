@@ -26,13 +26,36 @@ export const authOptions: NextAuthOptions = {
   jwt: { maxAge: 60 * 60 * 24 * 30 },
   pages: { signIn: "/login" },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // 首次登录：写入 id
       if (user) token.id = user.id;
+
+      // 每次 token 刷新时（首次登录 + session update 触发）从 DB 同步最新状态
+      // trigger === "update" 时是客户端主动调用 update()，也需要刷新
+      if (token.id && (user || trigger === "update")) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: {
+            vipLevel: true,
+            vipExpiresAt: true,
+            computePts: true,
+          },
+        });
+        if (dbUser) {
+          token.vipLevel = dbUser.vipLevel;
+          token.vipExpiresAt = dbUser.vipExpiresAt?.toISOString() ?? null;
+          token.computePts = dbUser.computePts;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.id) {
         (session.user as any).id = token.id;
+        (session.user as any).vipLevel = token.vipLevel ?? "FREE";
+        (session.user as any).vipExpiresAt = token.vipExpiresAt ?? null;
+        (session.user as any).computePts = token.computePts ?? 0;
       }
       return session;
     },
@@ -50,6 +73,9 @@ declare module "next-auth" {
       id: string;
       email?: string | null;
       name?: string | null;
+      vipLevel: string;
+      vipExpiresAt: string | null;
+      computePts: number;
     };
   }
 }
@@ -57,5 +83,8 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id?: string;
+    vipLevel?: string;
+    vipExpiresAt?: string | null;
+    computePts?: number;
   }
 }

@@ -1,6 +1,8 @@
 type CacheEntry<T> = { value: T; expiresAt: number };
 const cache = new Map<string, CacheEntry<any>>();
 
+import { detectMarketFromMessage } from "./detect-market";
+
 export async function cached<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
   const hit = cache.get(key);
   const now = Date.now();
@@ -118,12 +120,30 @@ export async function buildMarketContext(
     timeZone: "Asia/Shanghai",
     hour12: false,
   });
+
+  // 主入口（"general"）：尝试根据用户消息识别真实市场，注入对应实时数据
+  // ChatSession.channel 仍存 "general"——此处只为 system prompt 选数据源
+  let effective = channel;
+  let autoDetected = false;
+  if (channel === "general" && userMessage) {
+    const guess = detectMarketFromMessage(userMessage);
+    if (guess) {
+      effective = guess;
+      autoDetected = true;
+    }
+  }
+
   const lines: string[] = [
     `# 实时上下文（请优先采用，不要使用训练数据中的过时价格）`,
     `当前北京时间: ${now}`,
   ];
+  if (autoDetected) {
+    lines.push(
+      `> 已根据消息自动识别为「${effective}」市场，下方注入了相应实时数据。请在回答时**自然引用具体价格 / 结构数字**，让用户感觉你在看盘。`,
+    );
+  }
 
-  if (channel === "crypto") {
+  if (effective === "crypto") {
     try {
       const tickers = await fetchCryptoTickers();
       lines.push(``, `## 加密资产 24h 现货行情 (Binance)`);
@@ -154,7 +174,7 @@ export async function buildMarketContext(
         );
       }
     } catch {}
-  } else if (channel === "forex") {
+  } else if (effective === "forex") {
     try {
       const quotes = await fetchForexQuotes();
       lines.push(``, `## 主要外汇即时报价`);
@@ -163,7 +183,7 @@ export async function buildMarketContext(
         lines.push(`- ${q.pair}: ${q.price.toFixed(4)}`);
       }
     } catch {}
-  } else if (channel === "gold") {
+  } else if (effective === "gold") {
     try {
       const { fetchGoldQuote, fetchGoldKlines, GOLD_SOURCE_LABELS } = await import("./gold");
       const { STYLE_INTERVALS } = await import("./binance");
@@ -222,5 +242,27 @@ export async function buildMarketContext(
     ``,
     `若用户询问以上未列出的标的（美股/A股/期权等），请坦率说明"暂无实时数据接入，以下为基于经验的框架分析"再给结论。`,
   );
+
+  // 用户问的是具体市场但本次没注入实时数据 → 让 AI 顺势邀请上传截图
+  // 触发条件：自动识别命中 OR channel 是没有数据源的市场（us-stocks / a-shares）
+  // 不触发：channel="general" 且无关键词命中（用户在问通识/教学）；academy / twitter 等非市场频道
+  const dataInjectedMarkets = ["crypto", "gold", "forex"];
+  const knownMarkets = [...dataInjectedMarkets, "us-stocks", "a-shares"];
+  const hasInjectedData = dataInjectedMarkets.includes(effective);
+  const isAssetQuery = knownMarkets.includes(effective);
+  if (isAssetQuery && !hasInjectedData) {
+    const ASSET_LABEL: Record<string, string> = {
+      "us-stocks": "美股",
+      "a-shares": "A 股",
+    };
+    const label = ASSET_LABEL[effective] ?? "该标的";
+    lines.push(
+      ``,
+      `> ⚠ 本次未注入「${label}」实时数据（暂无对应数据源接入）。回答时请：`,
+      `> 1. 坦率说明"暂无实时数据接入"，**绝不编造具体价格 / 结构数字**`,
+      `> 2. **顺势自然邀请上传截图**：在回答末段加一句"如果方便，截一张当前${label} K 线图发上来，我就能基于真实形态给具体的潜在关注区域 / 结构失效参考"——语气轻、不强求`,
+      `> 3. 仍可基于经验给框架性观察（结构概念 / 宏观背景），但不要出现具体价位数字`,
+    );
+  }
   return lines.join("\n");
 }

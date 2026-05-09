@@ -8,17 +8,35 @@ export const dynamic = "force-dynamic";
 const MAX_MESSAGES = 30;
 
 export async function GET(req: NextRequest) {
+  const sessionIdParam = req.nextUrl.searchParams.get("sessionId");
   const channel = req.nextUrl.searchParams.get("channel");
-  if (!channel) return Response.json({ messages: [] });
 
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return Response.json({ messages: [] });
 
-  const cs = await prisma.chatSession.findFirst({
-    where: { userId, channel },
-    orderBy: { updatedAt: "desc" },
-  });
+  let cs: { id: string } | null = null;
+
+  if (sessionIdParam) {
+    // 按 sessionId 精确取 — 必须做 owner 校验，防越权
+    const found = await prisma.chatSession.findUnique({
+      where: { id: sessionIdParam },
+      select: { id: true, userId: true },
+    });
+    if (!found || found.userId !== userId) {
+      return Response.json({ messages: [] });
+    }
+    cs = { id: found.id };
+  } else if (channel) {
+    cs = await prisma.chatSession.findFirst({
+      where: { userId, channel },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true },
+    });
+  } else {
+    return Response.json({ messages: [] });
+  }
+
   if (!cs) return Response.json({ messages: [] });
 
   const rows = await prisma.chatMessage.findMany({

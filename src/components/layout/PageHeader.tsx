@@ -8,19 +8,19 @@ export function PageHeader({
   badge?: string;
 }) {
   return (
-    <div className="px-6 py-4 border-b border-bg-edge bg-bg-panel/30 flex items-center justify-between">
+    <div className="px-6 py-4 border-b border-white/[0.04] bg-bg-panel/30 flex items-center justify-between">
       <div className="flex items-baseline gap-3">
-        <div className="w-1 h-5 bg-accent-info rounded-sm" />
-        <h1 className="text-ink-bright text-lg font-bold tracking-wide">{title}</h1>
+        <div className="w-0.5 h-4 bg-accent-razer/40 rounded-sm" />
+        <h1 className="text-ink-bright text-lg font-semibold tracking-wide">{title}</h1>
         {badge && (
-          <span className="text-[10px] tracking-widest uppercase text-accent-info border border-accent-info/40 rounded-sm px-1.5 py-0.5">
+          <span className="text-[10px] tracking-[0.18em] uppercase text-ink-muted border border-white/[0.06] rounded px-1.5 py-0.5">
             {badge}
           </span>
         )}
       </div>
       {subtitle && (
-        <div className="text-[10px] tracking-widest uppercase text-ink-dim">
-          • {subtitle}
+        <div className="text-[10px] tracking-[0.18em] uppercase text-ink-dim">
+          {subtitle}
         </div>
       )}
     </div>

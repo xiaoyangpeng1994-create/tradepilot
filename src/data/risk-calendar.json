@@ -1,0 +1,51 @@
+[
+  {
+    "date": "2026-05-08",
+    "time": "20:30",
+    "region": "US",
+    "name": "美国 4 月 CPI",
+    "importance": "high"
+  },
+  {
+    "date": "2026-05-08",
+    "time": "20:30",
+    "region": "US",
+    "name": "美国初请失业金",
+    "importance": "medium"
+  },
+  {
+    "date": "2026-05-09",
+    "time": "08:30",
+    "region": "CN",
+    "name": "中国 4 月 CPI / PPI",
+    "importance": "medium"
+  },
+  {
+    "date": "2026-05-12",
+    "time": "20:30",
+    "region": "US",
+    "name": "美国 4 月零售销售",
+    "importance": "high"
+  },
+  {
+    "date": "2026-05-13",
+    "time": "02:00",
+    "region": "US",
+    "name": "FOMC 会议纪要",
+    "importance": "high"
+  },
+  {
+    "date": "2026-05-14",
+    "time": "20:30",
+    "region": "US",
+    "name": "美国 PPI",
+    "importance": "medium"
+  },
+  {
+    "date": "2026-05-15",
+    "time": "20:30",
+    "region": "US",
+    "name": "美国 5 月非农就业",
+    "importance": "high"
+  }
+]

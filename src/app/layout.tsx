@@ -5,32 +5,34 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://example.com"),
   title: {
-    default: "PENG GE AI · TRADING TERMINAL",
-    template: "%s · 彭哥 AI 交易终端",
+    default: "洞察AI · TradePilot",
+    template: "%s · 洞察AI · TradePilot",
   },
   description:
-    "彭哥 AI 交易助手 — 基于 Gemini 1.5 Pro 的机构级交易终端，覆盖外汇、黄金、加密、美股、A 股 5 大市场，支持 SMC/ICT 智能盘面剖析。",
+    "洞察AI · TradePilot — AI 交易副驾驶。覆盖外汇、黄金、加密、美股、A 股，问任何市场、上传 K 线、分析持仓，让 AI 帮你理解市场。",
   keywords: [
-    "彭哥 AI",
+    "洞察AI",
+    "TradePilot",
+    "AI 交易副驾驶",
     "AI 交易",
-    "Gemini 交易助手",
     "SMC 交易",
     "ICT 交易",
     "外汇分析",
     "加密订单流",
     "K 线分析",
   ],
-  authors: [{ name: "Peng Ge AI" }],
+  authors: [{ name: "TradePilot" }],
   openGraph: {
-    title: "PENG GE AI · TRADING TERMINAL",
-    description: "Gemini 驱动的机构级 AI 交易终端，5 大市场 SMC/ICT 实时拆解。",
+    title: "洞察AI · TradePilot",
+    description:
+      "洞察AI · TradePilot — AI 交易副驾驶。覆盖外汇、黄金、加密、美股、A 股，问任何市场、上传 K 线、分析持仓，让 AI 帮你理解市场。",
     type: "website",
     locale: "zh_CN",
   },
   twitter: {
     card: "summary_large_image",
-    title: "PENG GE AI · TRADING TERMINAL",
-    description: "Gemini 驱动的机构级 AI 交易终端。",
+    title: "洞察AI · TradePilot",
+    description: "AI 交易副驾驶 — 让 AI 帮你理解市场，而不是替你冲动交易。",
   },
   robots: {
     index: true,

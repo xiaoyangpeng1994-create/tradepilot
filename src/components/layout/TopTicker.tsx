@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { AIPulseStrip } from "./AIPulseStrip";
 
 type Ticker = {
   symbol: string;
@@ -7,7 +8,7 @@ type Ticker = {
   priceChangePercent: number;
 };
 
-export function TopTicker() {
+export function TopTicker({ pulseMessages = [] }: { pulseMessages?: string[] }) {
   const [tickers, setTickers] = useState<Ticker[]>([]);
   const [stale, setStale] = useState(false);
 
@@ -68,6 +69,9 @@ export function TopTicker() {
       <div className="flex whitespace-nowrap py-1.5 animate-marquee flex-1 min-w-0">
         <span className="px-4">{doubled}</span>
         <span className="px-4">{doubled}</span>
+      </div>
+      <div className="shrink-0 border-l border-bg-edge flex items-center bg-bg-card/40">
+        <AIPulseStrip messages={pulseMessages} />
       </div>
     </div>
   );

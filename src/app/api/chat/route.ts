@@ -3,17 +3,24 @@ import { createHash } from "node:crypto";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
-  chatStream,
-  qianwenAvailable,
+  routedChatStream,
+  isAnyModelAvailable,
   mockReply,
   modelDisplayLabel,
   type ChatHistoryItem,
   type TradingStyle,
-} from "@/lib/qianwen";
+} from "@/lib/model-router";
 import { buildMarketContext } from "@/lib/market";
 import { buildTraderProfile } from "@/lib/journal";
+import { selectGuidanceSnippet } from "@/lib/guidance";
 import { detectTradeMention } from "@/lib/trade-detection";
 import { isProPlusLevel, COST_TEXT_PT, COST_IMAGE_PT } from "@/lib/pricing";
+import { detectReplyMode, buildReplyModeBlock } from "@/lib/reply-mode";
+import {
+  getHistoryLimit,
+  trimHistory,
+  shouldGenerateSummary,
+} from "@/lib/context-budget";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -108,6 +115,10 @@ export async function POST(req: NextRequest) {
   let isVipPlus = false;
   let history: ChatHistoryItem[] = [];
   let tradingStyle: TradingStyle = "SWING";
+  // Context Budget：摘要相关字段（仅 ULTRA 使用）
+  let sessionSummary: string | null = null;
+  let sessionSummaryUpdatedAt: Date | null = null;
+  let sessionMessageCountAtSummary = 0;
 
   // 匿名访客闸门（IP+UA 滚动窗口）
   if (!userId) {
@@ -146,30 +157,60 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        const txTier = isVipPlusActive ? "vip_plus" : isVipActive ? "vip" : "free";
+
+        const csSelect = {
+          id: true,
+          summary: true,
+          summaryUpdatedAt: true,
+          messageCountAtSummary: true,
+        } as const;
+
         const existing = await tx.chatSession.findFirst({
           where: { userId, channel },
           orderBy: { updatedAt: "desc" },
+          select: csSelect,
         });
         const cs =
           existing ??
-          (await tx.chatSession.create({ data: { userId, channel } }));
+          (await tx.chatSession.create({ data: { userId, channel }, select: csSelect }));
 
-        // 取最近 10 条历史（在写入新 user 消息之前），按时间正序返回
+        // 取最近 N 条历史（按 tier 上限），在写入新 user 消息之前，按时间正序返回
         const recent = await tx.chatMessage.findMany({
           where: { sessionId: cs.id, role: { in: ["user", "assistant"] } },
           orderBy: { createdAt: "desc" },
-          take: 10,
+          take: getHistoryLimit(txTier),
           select: { role: true, content: true },
         });
         const rawAsc = recent.reverse() as ChatHistoryItem[];
         // 过滤掉历史里"我不支持图片"等幻觉短语的 assistant 回复（防止模型自我强化）；
         // 同时把对应的上一条 user 消息也丢掉，避免悬空 user 让模型困惑。
-        const historyAsc = filterPoisonedHistory(rawAsc);
+        const filteredAsc = filterPoisonedHistory(rawAsc);
+        // 再用 trimHistory 做最终截断（filterPoisonedHistory 可能减少条数，此处保持幂等）
+        const historyAsc = trimHistory(filteredAsc, txTier);
 
         if (!isVipActive) {
           await tx.user.update({
             where: { id: userId },
             data: { computePts: { decrement: cost } },
+          });
+        }
+
+        // 追问信号：若上一条 assistant 消息在 5 分钟内，给它的 followupCount +1
+        // 这是判断"AI 没说清楚"的最轻量信号，无需额外 LLM 调用
+        const FOLLOWUP_WINDOW_MS = 5 * 60 * 1000;
+        const lastAssistant = await tx.chatMessage.findFirst({
+          where: { sessionId: cs.id, role: "assistant" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, createdAt: true },
+        });
+        if (
+          lastAssistant &&
+          Date.now() - lastAssistant.createdAt.getTime() < FOLLOWUP_WINDOW_MS
+        ) {
+          await tx.chatMessage.update({
+            where: { id: lastAssistant.id },
+            data: { followupCount: { increment: 1 } },
           });
         }
 
@@ -194,6 +235,10 @@ export async function POST(req: NextRequest) {
           isVipPlusActive,
           history: historyAsc,
           tradingStyle: user.tradingStyle as TradingStyle,
+          // Context Budget：传出摘要相关字段供后续注入
+          sessionSummary: cs.summary ?? null,
+          sessionSummaryUpdatedAt: cs.summaryUpdatedAt ?? null,
+          sessionMessageCountAtSummary: cs.messageCountAtSummary,
         };
       });
       chatSessionId = result.sessionId;
@@ -202,6 +247,9 @@ export async function POST(req: NextRequest) {
       isVipPlus = result.isVipPlusActive;
       history = result.history;
       tradingStyle = result.tradingStyle ?? "SWING";
+      sessionSummary = result.sessionSummary;
+      sessionSummaryUpdatedAt = result.sessionSummaryUpdatedAt;
+      sessionMessageCountAtSummary = result.sessionMessageCountAtSummary;
     } catch (e) {
       const msg = (e as Error).message;
       if (msg === "USER_NOT_FOUND") {
@@ -229,7 +277,7 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       let acc = "";
       try {
-        if (!qianwenAvailable) {
+        if (!isAnyModelAvailable) {
           const text = mockReply(message);
           for (const ch of text) {
             controller.enqueue(encoder.encode(ch));
@@ -238,17 +286,56 @@ export async function POST(req: NextRequest) {
           }
         } else {
           const marketCtx = await buildMarketContext(channel, message, tradingStyle);
-          // 登录用户拼上交易档案——让 AI 知道用户的胜率/优势模式/当前持仓
-          const traderProfile = userId ? await buildTraderProfile(userId) : "";
-          const fullCtx = traderProfile
-            ? `${marketCtx}\n\n${traderProfile}`
-            : marketCtx;
-          for await (const delta of chatStream(message, {
+          // 登录用户拼上交易档案——按 tier 控制注入深度（匿名用户 0 token，FREE 最少，VIP/ULTRA 递进）
+          const profileTier = isVipPlus ? "vip_plus" : isVip ? "vip" : "free";
+          const traderProfile = userId
+            ? await buildTraderProfile(userId, profileTier, tradingStyle)
+            : "";
+
+          // Guidance Layer：尝试注入 1 条产品教育/陪练 snippet（仅登录用户）
+          let guidanceBlock = "";
+          if (userId) {
+            const [closedCount, openCount] = await Promise.all([
+              prisma.trade.count({ where: { userId, status: "CLOSED" } }),
+              prisma.trade.count({ where: { userId, status: "OPEN" } }),
+            ]);
+            const userMsgs = history
+              .filter((h) => h.role === "user")
+              .map((h) => h.content);
+            const guidance = selectGuidanceSnippet({
+              message,
+              userId,
+              userTurnCount: userMsgs.length + 1,
+              totalClosedTrades: closedCount,
+              hasOpenPosition: openCount > 0,
+              recentUserMessages: userMsgs,
+            });
+            if (guidance) {
+              guidanceBlock = `\n\n<guidance>${guidance.text}</guidance>`;
+            }
+
+            // Reply Mode：在 guidance 块之后追加回复模式指令
+            const replyMode = detectReplyMode(message);
+            const replyModeBlock = buildReplyModeBlock(replyMode, profileTier);
+            if (replyModeBlock) {
+              guidanceBlock += `\n\n<guidance>${replyModeBlock}</guidance>`;
+            }
+          }
+
+          // Context Budget：ULTRA 且有摘要时，注入会话摘要到 extraSystem
+          const summaryBlock =
+            isVipPlus && sessionSummary
+              ? `\n\n# 本会话摘要\n\n${sessionSummary}`
+              : "";
+
+          const fullCtx = `${marketCtx}${traderProfile ? `\n\n${traderProfile}` : ""}${guidanceBlock}${summaryBlock}`;
+          for await (const delta of routedChatStream(message, {
             image,
             history,
             extraSystem: fullCtx,
             tier: isVipPlus ? "vip_plus" : isVip ? "vip" : "free",
             style: tradingStyle,
+            userId,
           })) {
             controller.enqueue(encoder.encode(delta));
             acc += delta;
@@ -267,6 +354,26 @@ export async function POST(req: NextRequest) {
             });
           } catch (e) {
             console.error("[/api/chat] persist assistant message failed", { sessionId: chatSessionId, err: e });
+          }
+
+          // Context Budget：判断是否需要生成摘要（本轮只打 log，不调用 generateSummary）
+          const currentMessageCount = await prisma.chatMessage
+            .count({ where: { sessionId: chatSessionId } })
+            .catch(() => 0);
+          const budgetTier = isVipPlus ? "vip_plus" : isVip ? "vip" : "free";
+          const summaryCheck = shouldGenerateSummary(
+            {
+              summary: sessionSummary,
+              summaryUpdatedAt: sessionSummaryUpdatedAt,
+              messageCountAtSummary: sessionMessageCountAtSummary,
+            },
+            budgetTier,
+            currentMessageCount,
+          );
+          if (summaryCheck.should) {
+            console.log(
+              `[context-budget] shouldGenerateSummary=true sessionId=${chatSessionId} reason=${summaryCheck.reason}`,
+            );
           }
         }
         controller.close();
@@ -309,6 +416,9 @@ async function buildTradeHintHeaders(
   let payload: object;
 
   if (hit.intent === "OPEN") {
+    payload = hit;
+  } else if (hit.intent === "ROUND_TRIP") {
+    // 一句话内含完整 entry+exit，无需查历史 OPEN
     payload = hit;
   } else {
     try {

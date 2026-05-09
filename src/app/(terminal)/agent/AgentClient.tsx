@@ -221,7 +221,7 @@ function InvitePanel({ nickname }: { nickname: string }) {
   }, []);
   const url = origin ? `${origin}/register?ref=${encodeURIComponent(nickname)}` : "";
   const template = url
-    ? `🚀 我在用「彭哥 AI 交易终端」做交易决策辅助，PG 系列推理引擎 + SMC/ICT 框架，覆盖外汇/黄金/加密/美股/A股 5 大频道。
+    ? `🚀 我在用「洞察AI · TradePilot」做交易决策辅助，TP 系列推理引擎 + SMC/ICT 框架，覆盖外汇/黄金/加密/美股/A股 5 大市场。
 
 通过我的链接注册：
 ${url}
@@ -290,7 +290,7 @@ function SiteEnvPanel() {
           onClick={() => alert("LOGO 自定义上传将在白标系统上线后开放")}
           className="w-full terminal-card px-3 py-2 flex items-center justify-between hover:border-accent-info/40 transition-colors"
         >
-          <span className="text-xs text-ink-base">PENG_GE_V4_DARK.png</span>
+          <span className="text-xs text-ink-base">TRADEPILOT_DARK.png</span>
           <span className="text-[10px] text-accent-info">UPLOAD</span>
         </button>
       </div>
@@ -298,7 +298,7 @@ function SiteEnvPanel() {
         <div className="label-tag mb-1">TERMINAL_NAME</div>
         <input
           readOnly
-          value="彭哥智能交易站 [NODE_A01]"
+          value="洞察AI · TradePilot [NODE_A01]"
           className="w-full bg-bg-card border border-bg-edge rounded-md px-2 py-1.5 text-xs text-ink-bright outline-none"
         />
       </div>

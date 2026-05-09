@@ -19,7 +19,7 @@ export function TwitterClient({ signals }: { signals: Signal[] }) {
   const chatRef = useRef<ChatWindowHandle>(null);
 
   function deepDive(s: Signal) {
-    const prompt = `请基于 SMC/ICT 框架深度剖析这条来自 @${s.handle} (${s.name}) 的实时信号，重点判断入场逻辑是否成立、风险点在哪、合理止损/止盈位置：
+    const prompt = `请基于 SMC/ICT 框架深度剖析这条来自 @${s.handle} (${s.name}) 的实时信号，重点判断结构倾向是否成立、风险点在哪、潜在关注区域 / 结构失效参考 / 潜在目标区域：
 
 「${s.content}」
 
@@ -41,7 +41,7 @@ export function TwitterClient({ signals }: { signals: Signal[] }) {
         <ChatWindow
           ref={chatRef}
           channel="twitter"
-          placeholder="问问 AI：这一单入场逻辑可靠吗？"
+          placeholder="问问 AI：这一单的结构逻辑可靠吗？"
         />
       </div>
     </>
@@ -60,8 +60,8 @@ function AlphaBanner() {
         </div>
         <div className="text-[11px] text-ink-muted leading-relaxed mt-1">
           这里汇集了顶尖选手的实时信号。对某位大神的仓位有疑问？直接在下方对话框问我，或者点击信号下方的{" "}
-          <span className="text-accent-info">「Gemini 深剖」</span>
-          。我会利用顶级大语言模型即时为你拆解！
+          <span className="text-accent-info">「AI 深剖」</span>
+          。我会即时为你拆解结构逻辑！
         </div>
       </div>
     </div>
@@ -95,7 +95,7 @@ function SignalCard({ signal, onDeepDive }: { signal: Signal; onDeepDive: () => 
                 onClick={onDeepDive}
                 className="btn-primary text-xs gap-1.5 hover:bg-accent-info/30"
               >
-                <SparkIcon /> Gemini 深剖
+                <SparkIcon /> AI 深剖
               </button>
               <span className="text-[11px] text-ink-muted flex items-center gap-1">
                 <CommentIcon /> {signal.comments}

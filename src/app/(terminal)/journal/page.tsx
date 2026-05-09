@@ -13,7 +13,7 @@ export default async function JournalPage() {
 
   return (
     <>
-      <PageHeader title="交易日志" badge="PERSONAL_JOURNAL" />
+      <PageHeader title="你的 AI 交易画像" />
       <div className="flex-1 overflow-y-auto">
         <JournalClient />
       </div>
