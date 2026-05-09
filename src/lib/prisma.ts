@@ -15,10 +15,11 @@ function buildPrismaClient(): PrismaClient {
 
   if (useTurso) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { createClient } = require("@libsql/client") as typeof import("@libsql/client");
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { PrismaLibSql } = require("@prisma/adapter-libsql") as {
+      // 使用 eval 绕过 webpack 静态分析，确保运行时动态 require（不被打包）
+      // eslint-disable-next-line no-eval
+      const { createClient } = eval('require')("@libsql/client") as typeof import("@libsql/client");
+      // eslint-disable-next-line no-eval
+      const { PrismaLibSql } = eval('require')("@prisma/adapter-libsql") as {
         PrismaLibSql: new (client: ReturnType<typeof createClient>) => object;
       };
       const libsql  = createClient({ url: tursoUrl, authToken: tursoToken });
