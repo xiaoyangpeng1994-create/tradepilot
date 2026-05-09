@@ -1,9 +1,13 @@
 import { PrismaClient } from "@prisma/client";
+import { createClient } from "@libsql/client/http";
+import { PrismaLibSQL } from "@prisma/adapter-libsql";
 
 // ── Turso / libSQL 适配器（生产环境运行时）────────────────────────────────────
 // 本地开发：DATABASE_URL=file:./dev.db，走原生 SQLite
-// Vercel 生产运行时：DATABASE_URL=libsql://xxx + TURSO_AUTH_TOKEN，走 libSQL 适配器
-// Vercel 构建阶段：跳过 adapter，避免 next build 静态分析时报错
+// Vercel 生产运行时：DATABASE_URL=libsql://xxx + TURSO_AUTH_TOKEN，走 libSQL HTTP 适配器
+//
+// 关键：使用 @libsql/client/http 子路径（纯 HTTP，无 WASM/native 模块）
+// 这样 webpack 可以正常打包，Vercel serverless 也能正常运行
 
 function buildPrismaClient(): PrismaClient {
   const tursoUrl   = process.env.DATABASE_URL ?? "";
@@ -15,15 +19,8 @@ function buildPrismaClient(): PrismaClient {
 
   if (useTurso) {
     try {
-      // 使用 eval 绕过 webpack 静态分析，确保运行时动态 require（不被打包）
-      // eslint-disable-next-line no-eval
-      const { createClient } = eval('require')("@libsql/client") as typeof import("@libsql/client");
-      // eslint-disable-next-line no-eval
-      const { PrismaLibSql } = eval('require')("@prisma/adapter-libsql") as {
-        PrismaLibSql: new (client: ReturnType<typeof createClient>) => object;
-      };
       const libsql  = createClient({ url: tursoUrl, authToken: tursoToken });
-      const adapter = new PrismaLibSql(libsql);
+      const adapter = new PrismaLibSQL(libsql);
       return new PrismaClient({
         adapter,
         log: ["error"],
